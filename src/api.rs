@@ -6,6 +6,8 @@ use axum::{
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
+use url::Url;
 
 use crate::core::AppState;
 
@@ -50,4 +52,46 @@ async fn handle_redirect_request(
     } else {
         (StatusCode::NOT_FOUND).into_response()
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+/// encountered an Error while validating a url
+/// `ParseErr` happens when the url is invalid
+/// the others when we don't accept it for other reasons
+pub enum UrlError {
+    WrongScheme,
+    LocalHost,
+    NoHost,
+    ParseErr(url::ParseError),
+}
+
+impl Display for UrlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WrongScheme => write!(f, "the url must be of either http or htttps scheme"),
+            Self::LocalHost => write!(f, "the url can't have localhost as host"),
+            Self::NoHost => write!(f, "the supplied url does not have a host"),
+            Self::ParseErr(e) => write!(f, "failed parsing the url: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for UrlError {}
+
+/// validate a url, returning `Ok(())` on success`
+pub fn validate_url(url: &str) -> Result<(), UrlError> {
+    Url::parse(url).map_err(UrlError::ParseErr).and_then(|url| {
+        if url.scheme() != "http" && url.scheme() != "https" {
+            Err(UrlError::WrongScheme)
+        } else if url
+            .host_str()
+            .is_some_and(|host| host == "localhost" || host == "127.0.0.1")
+        {
+            Err(UrlError::LocalHost)
+        } else if url.host_str().is_none() {
+            Err(UrlError::NoHost)
+        } else {
+            Ok(())
+        }
+    })
 }
