@@ -85,7 +85,6 @@ pub fn validate_url(url: &str) -> Result<(), UrlError> {
     let url = Url::parse(url).map_err(UrlError::ParseErr)?;
 
     let host = url.host().ok_or(UrlError::NoHost)?;
-    dbg!(&host);
 
     if !["http", "https"].contains(&url.scheme()) {
         Err(UrlError::WrongScheme)
@@ -106,8 +105,6 @@ fn validate_host(host: Host<&str>) -> bool {
             let is_localhost = name.ends_with("localhost");
             // and check that we have a domain under the top level
             let has_sub_domain = name.contains('.');
-
-            dbg!([is_localhost, has_sub_domain]);
 
             !is_localhost && has_sub_domain
         }
