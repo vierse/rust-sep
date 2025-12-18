@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use rand::{Rng, distributions::Alphanumeric};
 use tokio::net::TcpListener;
-use rand::{distributions::Alphanumeric, Rng};
 
 use crate::{
     api::build_router,
@@ -37,33 +37,34 @@ fn generate_alias() -> String {
 #[async_trait]
 impl BaseApp for App {
     async fn shorten_url(&self, url: &str) -> Result<String> {
-
         const MAX_RETRIES: u32 = 10;
-        
+
         for _ in 0..MAX_RETRIES {
             let alias = generate_alias();
-            
+
             if self._db.get(&alias).await.is_ok() {
                 continue;
             }
-        
+
             match self._db.insert(&alias, url).await {
                 Ok(()) => return Ok(alias),
                 Err(e) => {
                     if self._db.get(&alias).await.is_ok() {
-
                         continue;
                     }
                     return Err(e);
                 }
             }
         }
-        
-        anyhow::bail!("Failed to generate unique alias after {} attempts", MAX_RETRIES)
+
+        anyhow::bail!(
+            "Failed to generate unique alias after {} attempts",
+            MAX_RETRIES
+        )
     }
 
     async fn get_url(&self, alias: &str) -> Result<String> {
-          let url = self._db.get(alias).await?;
+        let url = self._db.get(alias).await?;
         Ok(url)
     }
 }

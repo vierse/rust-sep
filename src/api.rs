@@ -30,7 +30,7 @@ async fn handle_shorten_request(
     State(AppState { app }): State<AppState>,
     Json(ShortenRequest { url }): Json<ShortenRequest>,
 ) -> impl IntoResponse {
-    let result = app.create_alias(&url).await;
+    let result = app.shorten_url(&url).await;
 
     if let Ok(alias) = result {
         (StatusCode::CREATED, Json(ShortenResponse { alias })).into_response()
