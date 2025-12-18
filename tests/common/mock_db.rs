@@ -15,4 +15,8 @@ impl Database for MockDB {
     async fn get(&self, _alias: &str) -> Result<String> {
         Ok(self.alias.clone())
     }
+
+    async fn exists(&self, _alias: &str) -> Result<bool> {
+        Ok(true)
+    }
 }
