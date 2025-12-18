@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use tokio::net::TcpListener;
+use rand::{distributions::Alphanumeric, Rng};
 
 use crate::{
     api::build_router,
@@ -11,7 +12,7 @@ use crate::{
 
 #[async_trait]
 pub trait BaseApp {
-    async fn create_alias(&self, url: &str) -> Result<String>;
+    async fn shorten_url(&self, url: &str) -> Result<String>;
 
     async fn get_url(&self, alias: &str) -> Result<String>;
 }
@@ -25,14 +26,45 @@ pub struct App {
     _db: Arc<dyn Database + Send + Sync>,
 }
 
+fn generate_alias() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(6)
+        .map(char::from)
+        .collect()
+}
+
 #[async_trait]
 impl BaseApp for App {
-    async fn create_alias(&self, _url: &str) -> Result<String> {
-        unimplemented!()
+    async fn shorten_url(&self, url: &str) -> Result<String> {
+
+        const MAX_RETRIES: u32 = 10;
+        
+        for _ in 0..MAX_RETRIES {
+            let alias = generate_alias();
+            
+            if self._db.get(&alias).await.is_ok() {
+                continue;
+            }
+        
+            match self._db.insert(&alias, url).await {
+                Ok(()) => return Ok(alias),
+                Err(e) => {
+                    if self._db.get(&alias).await.is_ok() {
+
+                        continue;
+                    }
+                    return Err(e);
+                }
+            }
+        }
+        
+        anyhow::bail!("Failed to generate unique alias after {} attempts", MAX_RETRIES)
     }
 
-    async fn get_url(&self, _alias: &str) -> Result<String> {
-        unimplemented!()
+    async fn get_url(&self, alias: &str) -> Result<String> {
+          let url = self._db.get(alias).await?;
+        Ok(url)
     }
 }
 
