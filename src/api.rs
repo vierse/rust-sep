@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use url::Url;
+use url::{Host, Url};
 
 use crate::core::AppState;
 
@@ -59,8 +59,9 @@ async fn handle_redirect_request(
 /// `ParseErr` happens when the url is invalid
 /// the others when we don't accept it for other reasons
 pub enum UrlError {
+    HasAuthority,
     WrongScheme,
-    LocalHost,
+    InvalidHost,
     NoHost,
     ParseErr(url::ParseError),
 }
@@ -68,8 +69,9 @@ pub enum UrlError {
 impl Display for UrlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::HasAuthority => write!(f, "the host can't have passwords, usernames or ports"),
             Self::WrongScheme => write!(f, "the url must be of either http or htttps scheme"),
-            Self::LocalHost => write!(f, "the url can't have localhost as host"),
+            Self::InvalidHost => write!(f, "the url can't have localhost as host"),
             Self::NoHost => write!(f, "the supplied url does not have a host"),
             Self::ParseErr(e) => write!(f, "failed parsing the url: {e}"),
         }
@@ -80,18 +82,112 @@ impl std::error::Error for UrlError {}
 
 /// validate a url, returning `Ok(())` on success`
 pub fn validate_url(url: &str) -> Result<(), UrlError> {
-    Url::parse(url).map_err(UrlError::ParseErr).and_then(|url| {
-        if url.scheme() != "http" && url.scheme() != "https" {
-            Err(UrlError::WrongScheme)
-        } else if url
-            .host_str()
-            .is_some_and(|host| host == "localhost" || host == "127.0.0.1")
-        {
-            Err(UrlError::LocalHost)
-        } else if url.host_str().is_none() {
-            Err(UrlError::NoHost)
-        } else {
-            Ok(())
+    let url = Url::parse(url).map_err(UrlError::ParseErr)?;
+
+    let host = url.host().ok_or(UrlError::NoHost)?;
+    dbg!(&host);
+
+    if !["http", "https"].contains(&url.scheme()) {
+        Err(UrlError::WrongScheme)
+    } else if !validate_host(host) {
+        Err(UrlError::InvalidHost)
+    } else if url.has_authority() {
+        Err(UrlError::HasAuthority)
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_host(host: Host<&str>) -> bool {
+    match host {
+        Host::Domain(name) => {
+            let name = name.trim_end_matches('.');
+            // check that the top level domain isn't localhost
+            let is_localhost = name.ends_with("localhost");
+            // and check that we have a domain under the top level
+            let has_sub_domain = name.contains('.');
+
+            dbg!([is_localhost, has_sub_domain]);
+
+            !is_localhost && has_sub_domain
         }
-    })
+        // disallow special addresses stable std recognizes
+        Host::Ipv4(ipv4_addr) => {
+            !ipv4_addr.is_loopback()
+                && !ipv4_addr.is_unspecified()
+                && !ipv4_addr.is_link_local()
+                && !ipv4_addr.is_private()
+                && !ipv4_addr.is_multicast()
+        }
+        Host::Ipv6(ipv6_addr) => {
+            !ipv6_addr.is_loopback()
+                && !ipv6_addr.is_unspecified()
+                && !ipv6_addr.is_unique_local()
+                && !ipv6_addr.is_unicast_link_local()
+                && !ipv6_addr.is_multicast()
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{UrlError, validate_url};
+
+    #[test]
+    fn invalid_schemes() {
+        let wrong_scheme_urls = [
+            "ftp://user:password@hostname.com/txt.txt",
+            "ssh://login@server.com:12345/repository.git",
+        ];
+
+        let wrong_scheme_results = wrong_scheme_urls.map(validate_url);
+
+        for res in wrong_scheme_results {
+            assert_eq!(res, Err(UrlError::WrongScheme))
+        }
+
+        let right_scheme_urls = [
+            "http://user:password@hostname.com/txt.txt",
+            "https:///home/user/.bashrc",
+            "http://login@server.com:12345/repository.git",
+            "https:/run/foo.socket",
+        ];
+
+        let right_scheme_results = right_scheme_urls.map(validate_url);
+
+        for res in right_scheme_results {
+            assert_ne!(res, Err(UrlError::WrongScheme))
+        }
+    }
+
+    #[test]
+    fn invalid_hosts() {
+        let wrong_host_urls = [
+            "http://localhost/txt.txt",
+            "https://127.0.0.1/txt.txt",
+            "http://localhost.",
+        ];
+
+        let wrong_host_results = wrong_host_urls.map(validate_url);
+
+        assert!(
+            wrong_host_results
+                .into_iter()
+                .all(|res| res == Err(UrlError::InvalidHost))
+        );
+
+        let no_host_url = validate_url("http:///example");
+        assert_eq!(no_host_url, Err(UrlError::InvalidHost));
+    }
+
+    #[test]
+    fn rejects_authority() {
+        let invalid_urls = ["http://user:password@hostname.com/txt.txt"];
+
+        let invalid_results = invalid_urls.map(validate_url);
+
+        for res in invalid_results {
+            assert_eq!(res, Err(UrlError::HasAuthority))
+        }
+    }
 }
