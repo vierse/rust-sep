@@ -59,7 +59,7 @@ async fn handle_redirect_request(
 /// `ParseErr` happens when the url is invalid
 /// the others when we don't accept it for other reasons
 pub enum UrlError {
-    HasAuthority,
+    HasPasswordOrUsername,
     WrongScheme,
     InvalidHost,
     NoHost,
@@ -69,7 +69,7 @@ pub enum UrlError {
 impl Display for UrlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::HasAuthority => write!(f, "the host can't have passwords, usernames or ports"),
+            Self::HasPasswordOrUsername => write!(f, "the host can't have passwords or usernames"),
             Self::WrongScheme => write!(f, "the url must be of either http or htttps scheme"),
             Self::InvalidHost => write!(f, "the url can't have localhost as host"),
             Self::NoHost => write!(f, "the supplied url does not have a host"),
@@ -86,12 +86,14 @@ pub fn validate_url(url: &str) -> Result<(), UrlError> {
 
     let host = url.host().ok_or(UrlError::NoHost)?;
 
+    let has_uname_or_pword = !url.username().is_empty() || url.password().is_some();
+
     if !["http", "https"].contains(&url.scheme()) {
         Err(UrlError::WrongScheme)
     } else if !validate_host(host) {
         Err(UrlError::InvalidHost)
-    } else if url.has_authority() {
-        Err(UrlError::HasAuthority)
+    } else if has_uname_or_pword {
+        Err(UrlError::HasPasswordOrUsername)
     } else {
         Ok(())
     }
@@ -184,7 +186,13 @@ mod test {
         let invalid_results = invalid_urls.map(validate_url);
 
         for res in invalid_results {
-            assert_eq!(res, Err(UrlError::HasAuthority))
+            assert_eq!(res, Err(UrlError::HasPasswordOrUsername))
         }
+    }
+
+    #[test]
+    fn accpets_good_url() {
+        let res = validate_url("https://example.com");
+        assert_eq!(res, Ok(()));
     }
 }
