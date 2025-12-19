@@ -191,7 +191,7 @@ mod test {
     }
 
     #[test]
-    fn accpets_good_url() {
+    fn accepts_good_url() {
         let res = validate_url("https://example.com");
         assert_eq!(res, Ok(()));
     }
