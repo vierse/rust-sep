@@ -1,0 +1,22 @@
+services:
+  web-build:
+    image: denoland/deno:2.6.3
+    working_dir: /app
+    environment:
+      DENO_DIR: /deno-dir
+    volumes:
+      - ./deno.json:/app/deno.json:ro
+      - ./web:/app/web
+      - deno_cache:/deno-dir
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        deno task web:install
+        deno task web:build
+        chown -R ${UID}:${GID} /app/web/node_modules
+        chown -R ${UID}:${GID} /app/web/dist
+    restart: "no"
+volumes:
+  deno_cache:
