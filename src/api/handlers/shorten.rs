@@ -47,7 +47,10 @@ fn validate_url(url: &str) -> Result<()> {
     if domain.is_empty() {
         bail!("missing domain");
     }
-    if domain.trim_end_matches(".").to_ascii_lowercase() == "localhost"
+    if domain
+        .trim_end_matches(".")
+        .to_ascii_lowercase()
+        .eq_ignore_ascii_case("localhost")
         || domain.ends_with(".local")
         || !domain.contains('.')
     {
