@@ -14,6 +14,20 @@ To run the tests:
 cargo test
 ```
 
+## Docker:
+
+Build the image:
+```
+./scripts/build-docker-image.sh
+```
+
+Create a container:
+```
+docker run -p 3000:3000 shorten-app
+```
+
+Web UI should be accessible at `127.0.0.1:3000`
+
 ## Making requests with `curl`
 
 `POST` Request:

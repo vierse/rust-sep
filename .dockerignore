@@ -1,0 +1,5 @@
+.git/
+.gitignore
+target/
+node_modules/
+dist/
