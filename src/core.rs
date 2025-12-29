@@ -6,7 +6,7 @@ use rand::{Rng, distributions::Alphanumeric};
 use tokio::net::TcpListener;
 
 use crate::{
-    api::build_router,
+    api,
     db::{Database, SqliteDB},
 };
 
@@ -72,7 +72,7 @@ impl BaseApp for App {
 pub async fn run() -> Result<()> {
     let db = Arc::new(SqliteDB {});
     let app = Arc::new(App { db });
-    let router = build_router(AppState { app });
+    let router = api::build_router(AppState { app });
 
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
