@@ -1,0 +1,9 @@
+{
+  "tasks": {
+    "web:install": "cd web && deno install",
+    "web:dev": "cd web && deno task dev",
+    "web:build": "cd web && deno task build",
+    "web:lint": "cd web && deno task lint",
+    "web:preview": "cd web && deno task preview"
+  }
+}
