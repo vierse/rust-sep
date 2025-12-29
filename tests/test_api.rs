@@ -48,7 +48,7 @@ async fn redirect_request_ok() {
     let router = build_router(AppState { app: Arc::new(app) });
 
     let response = router
-        .oneshot(Request::get("/example").body(Body::empty()).unwrap())
+        .oneshot(Request::get("/r/example").body(Body::empty()).unwrap())
         .await
         .unwrap();
 
