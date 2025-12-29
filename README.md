@@ -2,14 +2,26 @@
 
 ## Usage
 
-To run the server:
+Setup environment:
+```
+./scripts/setup-env.sh
+```
+
+Build web UI:
+```
+docker compose run --rm web-build
+```
+
+Run the server:
 ```
 cargo run --bin server
 ```
 Listens on `localhost:3000`.
 
 
-To run the tests:
+## Tests
+
+Run:
 ```
 cargo test
 ```
