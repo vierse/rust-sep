@@ -7,6 +7,7 @@ use tokio::net::TcpListener;
 
 use crate::{
     api,
+    config::Settings,
     db::{Database, SqliteDB},
 };
 
@@ -69,12 +70,14 @@ impl BaseApp for App {
     }
 }
 
-pub async fn run() -> Result<()> {
+pub async fn run(config: Settings) -> Result<()> {
+    let addr = format!("0.0.0.0:{}", config.port);
+
     let db = Arc::new(SqliteDB {});
     let app = Arc::new(App { db });
     let router = api::build_router(AppState { app });
 
-    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = TcpListener::bind(addr).await.unwrap();
 
     axum::serve(listener, router).await.unwrap();
 

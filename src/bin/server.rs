@@ -1,9 +1,11 @@
 use anyhow::Result;
-use url_shorten::core;
+use url_shorten::{config, core};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
-    core::run().await
+    let config = config::load()?;
+
+    core::run(config).await
 }
