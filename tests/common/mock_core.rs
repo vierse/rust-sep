@@ -9,7 +9,7 @@ pub struct MockApp {
 
 #[async_trait]
 impl BaseApp for MockApp {
-    async fn create_alias(&self, _url: &str) -> Result<String> {
+    async fn shorten_url(&self, _url: &str) -> Result<String> {
         Ok(self.alias.clone())
     }
 
