@@ -70,7 +70,7 @@ impl BaseApp for App {
 }
 
 pub async fn run() -> Result<()> {
-    let db = Arc::new(SqliteDB {});
+    let db = Arc::new(SqliteDB::new("sqlite:./db.sqlite").await?);
     let app = Arc::new(App { db });
     let router = build_router(AppState { app });
 
