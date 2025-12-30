@@ -1,5 +1,5 @@
 use anyhow::Result;
-use url_shorten::{config, core};
+use url_shorten::{app, config};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -7,5 +7,5 @@ async fn main() -> Result<()> {
 
     let config = config::load()?;
 
-    core::run(config).await
+    app::run(config).await
 }

@@ -58,6 +58,8 @@ pub fn load() -> Result<Settings> {
         Url::parse(&env_str).map_err(|e| e.into())
     })?;
 
+    // to avoid destructuring database_url_opt (we need it later)
+    #[allow(clippy::unnecessary_unwrap)]
     if port_opt.is_some() && database_url_opt.is_some() {
         return Ok(Settings {
             port: port_opt.unwrap(),
