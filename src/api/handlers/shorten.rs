@@ -3,7 +3,7 @@ use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::core::AppState;
+use crate::app::AppState;
 
 #[derive(Deserialize)]
 pub struct ShortenRequest {
@@ -16,7 +16,7 @@ pub struct ShortenResponse {
 }
 
 pub async fn shorten(
-    State(AppState { app }): State<AppState>,
+    State(app): State<AppState>,
     Json(ShortenRequest { url }): Json<ShortenRequest>,
 ) -> impl IntoResponse {
     if validate_url(&url).is_err() {

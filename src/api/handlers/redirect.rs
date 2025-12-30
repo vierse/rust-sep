@@ -4,12 +4,9 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 
-use crate::core::AppState;
+use crate::app::AppState;
 
-pub async fn redirect(
-    State(AppState { app }): State<AppState>,
-    Path(alias): Path<String>,
-) -> impl IntoResponse {
+pub async fn redirect(State(app): State<AppState>, Path(alias): Path<String>) -> impl IntoResponse {
     let result = app.get_url(&alias).await;
 
     if let Ok(url) = result {

@@ -11,10 +11,10 @@ async function shortenUrl(url: string, signal: AbortSignal): Promise<string> {
   });
   if (!result.ok) throw new Error(`Request error (${result.status})`);
 
-  const data = (await result.json()) as { shortUrl: string };
-  if (!data.shortUrl) throw new Error("Bad response: missing shortUrl");
+  const data = (await result.json()) as { alias: string };
+  if (!data.alias) throw new Error("Bad response: missing alias");
 
-  return `${window.location.origin}/${data.shortUrl}`;
+  return `${window.location.origin}/r/${data.alias}`;
 }
 
 const initModel: Model = {
