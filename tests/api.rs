@@ -21,9 +21,10 @@ async fn json<T: DeserializeOwned>(response: Response) -> T {
 
 async fn router() -> Router {
     let config = config::load().expect("Could not load config");
-    let state = app::build_app_state(config.database_url.as_str())
+    let pool = app::connect_to_db(config.database_url.as_str())
         .await
-        .unwrap();
+        .expect("Could not connect to DB");
+    let state = app::build_app_state(pool).await.unwrap();
     api::build_router(state)
 }
 

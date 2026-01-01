@@ -20,17 +20,7 @@ docker compose run --rm web-build
 docker compose up postgres -d
 ```
 
-5. Run SQL migrations to setup the database:
-```
-sqlx migrate run
-```
-
-6. (Optional) if you add SQL queries, you'll need to generate sqlx cache for compile-time checking without a database running:
-```
-cargo sqlx prepare
-```
-
-7. Run the server:
+5. Run the server:
 ```
 cargo run --bin server
 ```
@@ -40,14 +30,20 @@ cargo run --bin server
 RUST_LOG=debug cargo run --bin server
 ```
 
-8. By default it should be available at: http://localhost:3000/
+6. By default it should be available at: http://localhost:3000/
 
-9. To stop the database container:
+7. To stop the database container:
 ```
 docker compose down -v
 ```
-Omit `-v` if you want to keep the data
+Omit `-v` if you want to keep the data.
 
+## SQL
+If you add SQL queries, you'll need to generate sqlx cache for compile-time checking without a database running:
+```
+cargo sqlx prepare
+```
+sqlx cache is stored in `.sqlx` and should be included in Git.
 
 ## Tests
 

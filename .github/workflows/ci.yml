@@ -44,10 +44,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85.0
         with:
           components: rustfmt, clippy
-      - name: install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --features postgres
       - name: run SQL migrations
-        run: sqlx migrate run
+        run: cargo run --bin migrate
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy
