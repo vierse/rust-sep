@@ -5,12 +5,12 @@ use url::Url;
 
 use crate::app::AppState;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ShortenRequest {
     pub url: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ShortenResponse {
     pub alias: String,
 }
