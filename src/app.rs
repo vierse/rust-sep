@@ -16,6 +16,7 @@ impl AppState {
     pub async fn shorten_url(&self, url: &str) -> Result<String> {
         let mut tx: Transaction<Postgres> = self.pool.begin().await?;
 
+        // Insert the url into database to get a unique id
         let rec = sqlx::query!(
             r#"
             INSERT INTO links (url)
@@ -32,6 +33,7 @@ impl AppState {
 
         let alias = self.sqids.encode(&[id])?;
 
+        // Update the record with generated alias
         let updated = sqlx::query!(
             r#"
             UPDATE links
@@ -78,6 +80,7 @@ impl AppState {
 
 pub async fn build_app_state(database_url: &str) -> Result<AppState> {
     const MIN_ALIAS_LENGTH: u8 = 6;
+    // Shuffled alphabet for Sqids to generate ids from
     const ALPHABET: &str = "79Hr0JZijqWTnxhgoDEKMRpX4FNIfywG3e6LcldO5bCUYSBPa81s2QAumtzVvk";
 
     let sqids = Sqids::builder()
