@@ -18,6 +18,8 @@ pub trait Database {
     async fn exists(&self, alias: &str) -> Result<bool>;
 
     async fn remove(&self, alias: &str) -> Result<bool>;
+
+    async fn update_url(&self, alias: &str, new_url: &str) -> Result<bool>;
 }
 
 #[derive(Clone)]
@@ -86,5 +88,21 @@ impl Database for SqliteDB {
         .await?;
 
         Ok(succesfully_removed.rows_affected() > 0)
+    }
+
+    async fn update_url(&self, alias: &str, new_url: &str) -> Result<bool> {
+        let result = sqlx::query(
+            r#"
+            UPDATE aliases
+            SET url = ?
+            WHERE alias = ?;
+            "#,
+        )
+        .bind(new_url)
+        .bind(alias)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
     }
 }

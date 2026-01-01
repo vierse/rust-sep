@@ -23,4 +23,8 @@ impl Database for MockDB {
     async fn remove(&self, _alias: &str) -> Result<bool> {
         Ok(true)
     }
+    
+    async fn update_url(&self, _alias: &str, _new_url: &str) -> Result<bool> {
+        Ok(true)
+    }
 }
