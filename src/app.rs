@@ -1,63 +1,58 @@
 use anyhow::{Context, Result, bail};
-use rand::{Rng, distributions::Alphanumeric};
-use sqlx::{PgPool, Pool, Postgres};
+use sqids::Sqids;
+use sqlx::{PgPool, Pool, Postgres, Transaction};
 use tokio::net::TcpListener;
 
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
-
 use crate::{api, config::Settings};
-
-const MIN_ALIAS_LENGTH: usize = 6;
 
 #[derive(Clone)]
 pub struct AppState {
     pool: Pool<Postgres>,
-    alias_length: Arc<AtomicUsize>,
-}
-
-fn generate_alias(len: usize) -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(len)
-        .map(char::from)
-        .collect()
+    sqids: Sqids,
 }
 
 impl AppState {
     #[tracing::instrument(name = "app::shorten_url", skip(self))]
     pub async fn shorten_url(&self, url: &str) -> Result<String> {
-        const MAX_RETRIES: usize = 5;
+        let mut tx: Transaction<Postgres> = self.pool.begin().await?;
 
-        let mut len = self.alias_length.load(Ordering::Relaxed);
-        for _ in 0..MAX_RETRIES {
-            let alias = generate_alias(len);
+        let rec = sqlx::query!(
+            r#"
+            INSERT INTO links (url)
+            VALUES ($1)
+            RETURNING id
+            "#,
+            url,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("DB insert url query failed")?;
 
-            let rec = sqlx::query!(
-                r#"
-                INSERT INTO links (alias, url)
-                VALUES ($1, $2)
-                ON CONFLICT (alias) DO NOTHING
-                RETURNING alias
-                "#,
-                alias,
-                url
-            )
-            .fetch_optional(&self.pool)
+        let id = rec.id as u64;
+
+        let alias = self.sqids.encode(&[id])?;
+
+        let updated = sqlx::query!(
+            r#"
+            UPDATE links
+            SET alias = $1
+            WHERE id = $2
+            RETURNING alias
+            "#,
+            alias,
+            rec.id
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("DB update url query failed")?;
+
+        tx.commit()
             .await
-            .context("DB insert query failed")?;
+            .context("DB failed to commit transaction")?;
 
-            if let Some(r) = rec {
-                return Ok(r.alias);
-            }
+        let alias = updated.alias.context("Alias was not set after update")?;
 
-            len += 1;
-            self.alias_length.fetch_add(1, Ordering::Relaxed);
-        }
-
-        bail!("Failed to generate a unique alias after {MAX_RETRIES} attempts");
+        Ok(alias)
     }
 
     #[tracing::instrument(name = "app::get_url", skip(self))]
@@ -82,11 +77,15 @@ impl AppState {
 }
 
 pub async fn build_app_state(database_url: &str) -> Result<AppState> {
+    const MIN_ALIAS_LENGTH: u8 = 6;
+    const ALPHABET: &str = "79Hr0JZijqWTnxhgoDEKMRpX4FNIfywG3e6LcldO5bCUYSBPa81s2QAumtzVvk";
+
+    let sqids = Sqids::builder()
+        .min_length(MIN_ALIAS_LENGTH)
+        .alphabet(ALPHABET.chars().collect())
+        .build()?;
     let pool = PgPool::connect(database_url).await?;
-    Ok(AppState {
-        pool,
-        alias_length: Arc::new(AtomicUsize::new(MIN_ALIAS_LENGTH)),
-    })
+    Ok(AppState { pool, sqids })
 }
 
 pub async fn run(config: Settings) -> Result<()> {
