@@ -81,12 +81,16 @@ impl AppState {
     }
 }
 
-pub async fn run(config: Settings) -> Result<()> {
-    let pool = PgPool::connect(config.database_url.as_str()).await?;
-    let state = AppState {
+pub async fn build_app_state(database_url: &str) -> Result<AppState> {
+    let pool = PgPool::connect(database_url).await?;
+    Ok(AppState {
         pool,
         alias_length: Arc::new(AtomicUsize::new(MIN_ALIAS_LENGTH)),
-    };
+    })
+}
+
+pub async fn run(config: Settings) -> Result<()> {
+    let state = build_app_state(config.database_url.as_str()).await?;
     let router = api::build_router(state);
 
     let addr = format!("0.0.0.0:{}", config.port);
