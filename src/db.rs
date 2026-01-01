@@ -16,6 +16,8 @@ pub trait Database {
     async fn get(&self, alias: &str) -> Result<String>;
 
     async fn exists(&self, alias: &str) -> Result<bool>;
+
+    async fn remove(&self, alias: &str) -> Result<bool>;
 }
 
 #[derive(Clone)]
@@ -70,5 +72,19 @@ impl Database for SqliteDB {
         .await?;
 
         Ok(exist.is_some())
+    }
+
+    async fn remove(&self, alias: &str) -> Result<bool> {
+        let succesfully_removed = sqlx::query(
+            r#"
+            DELETE FROM aliases
+            WHERE alias = ?;
+            "#,
+        )
+        .bind(alias)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(succesfully_removed.rows_affected() > 0)
     }
 }

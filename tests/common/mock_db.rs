@@ -19,4 +19,8 @@ impl Database for MockDB {
     async fn exists(&self, _alias: &str) -> Result<bool> {
         Ok(true)
     }
+
+    async fn remove(&self, _alias: &str) -> Result<bool> {
+        Ok(true)
+    }
 }
