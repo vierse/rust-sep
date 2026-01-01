@@ -1,13 +1,22 @@
+/**
+ * App state that is rendered by the UI
+ */
 export type AppState = {
   userInput: string;
   result: Result;
 }
 
+/**
+ * App state + effects queue
+ */
 export type Model = {
   state: AppState;
   effects: Effect[];
 }
 
+/**
+ * States for user URL input
+ */
 type Result =
   | { kind: "none" }
   | { kind: "waiting" }
@@ -15,6 +24,9 @@ type Result =
   | { kind: "ok"; shortUrl: string }
   | { kind: "err"; errMsg: string };
 
+/**
+ * Events used by {@link eventReducer}
+ */
 type Event =
   | { kind: "setInput"; input: string }
   | { kind: "submit" }
@@ -26,18 +38,39 @@ type Event =
   | { kind: "clear" }
   | { kind: "effectsRun"; count: number };
 
+/**
+ * Effects produced by {@link eventReducer}
+ */
 type Effect =
   | { kind: "shortenUrl"; url: string }
   | { kind: "clipboardCopy"; shortUrl: string }
 
+/**
+ * Returns a new model with effects appended to the effect queue.
+ * @param m Current model
+ * @param effects Effects to append
+ * @returns A new model with effects appended
+ */
 function enqueue(m: Model, ...effects: Effect[]): Model {
   return { ...m, effects: m.effects.concat(effects) };
 }
 
+/**
+ * Returns a new model with its state replaced
+ * @param m Current model
+ * @param state New state
+ * @returns A new model with updated state
+ */
 function withState(m: Model, state: AppState): Model {
   return { ...m, state };
 }
 
+/**
+ * Reducer managing state transitions for user URL input
+ * @param m Current model
+ * @param ev Incoming event
+ * @returns Resulting model
+ */
 export function eventReducer(m: Model, ev: Event): Model {
   const { state } = m;
 

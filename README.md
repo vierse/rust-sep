@@ -1,22 +1,52 @@
 # Rust SEP - URL Shortener
 
-## Usage
+## Setup
 
-Setup environment:
+
+1. Install [Docker](https://docs.docker.com/get-started/get-docker/).
+
+2. You need to provide `.env` file that defines environment variables for the project. You can just copy `.env.example`:
 ```
-./scripts/setup-env.sh
+cp .env.example .env
 ```
 
-Build web UI:
+3. Build web UI:
 ```
 docker compose run --rm web-build
 ```
 
-Run the server:
+4. Start database container:
+```
+docker compose up postgres -d
+```
+
+5. Run SQL migrations to setup the database:
+```
+sqlx migrate run
+```
+
+6. (Optional) if you add SQL queries, you'll need to generate sqlx cache for compile-time checking without a database running:
+```
+cargo sqlx prepare
+```
+
+7. Run the server:
 ```
 cargo run --bin server
 ```
-Listens on `localhost:3000`.
+
+(Optional) You can also set `RUST_LOG` to print traces:
+```
+RUST_LOG=debug cargo run --bin server
+```
+
+8. By default it should be available at: http://localhost:3000/
+
+9. To stop the database container:
+```
+docker compose down -v
+```
+Omit `-v` if you want to keep the data
 
 
 ## Tests
@@ -25,20 +55,6 @@ Run:
 ```
 cargo test
 ```
-
-## Docker:
-
-Build the image:
-```
-./scripts/build-docker-image.sh
-```
-
-Create a container:
-```
-docker run -p 3000:3000 shorten-app
-```
-
-Web UI should be accessible at `127.0.0.1:3000`
 
 ## Making requests with `curl`
 

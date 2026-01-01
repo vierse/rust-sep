@@ -9,6 +9,11 @@ type Button =
   | { type: "copy"; loading?: boolean }
   | { type: "clear"; loading?: boolean };
 
+/**
+ * Derives set of buttons to render from the app state.
+ * @param state Current app state
+ * @returns Buttons to render, in display order
+ */
 function getButtonsByState(state: AppState): Button[] {
   switch (state.result.kind) {
     case "none":
@@ -80,7 +85,9 @@ function ActionButtons({ state, events }: { state: AppState, events: ViewEvents 
 }
 
 function InputField({ state, events }: { state: AppState; events: ViewEvents }) {
+  // Input field should be read-only if it's showing a result, during copying or waiting for request
   const isReadOnly = state.result.kind === "ok" || state.result.kind === "copying" || state.result.kind === "waiting";
+  // Controls what value gets displayed to the user, the Request result or their input
   const value =
     state.result.kind === "ok" || state.result.kind === "copying"
       ? state.result.shortUrl

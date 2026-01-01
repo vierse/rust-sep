@@ -1,5 +1,18 @@
+# Git
 .git/
 .gitignore
+.github
+
+# Rust
 target/
+.sqlx
+
+# JS
 node_modules/
 dist/
+
+# env
+.env
+.env.*
+compose.yml
+.DS_Store
