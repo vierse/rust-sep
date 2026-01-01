@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::Result;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -19,33 +19,59 @@ pub async fn shorten(
     State(app): State<AppState>,
     Json(ShortenRequest { url }): Json<ShortenRequest>,
 ) -> impl IntoResponse {
-    if validate_url(&url).is_err() {
-        return (StatusCode::BAD_REQUEST).into_response();
+    if let Err(e) = validate_url(&url) {
+        tracing::warn!(cause = %e, "URL verification failed");
+        return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
     }
 
-    let result = app.shorten_url(&url).await;
-    if let Ok(alias) = result {
-        (StatusCode::CREATED, Json(ShortenResponse { alias })).into_response()
-    } else {
-        (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+    match app.shorten_url(&url).await {
+        Ok(alias) => (StatusCode::CREATED, Json(ShortenResponse { alias })).into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "shorten request err");
+            (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+        }
     }
 }
 
-fn validate_url(url: &str) -> Result<()> {
-    let url = Url::parse(url)?;
+/// encountered an Error while validating a url
+/// `ParseErr` happens when the url is invalid
+/// the others when we don't accept it for other reasons
+#[derive(Debug, PartialEq, Eq)]
+pub enum UrlError {
+    ContainsUserinfo,
+    WrongScheme,
+    DisallowedDomain,
+    EmptyDomain,
+    ParseErr(url::ParseError),
+}
+
+impl std::fmt::Display for UrlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ContainsUserinfo => write!(f, "the host can't have passwords or usernames"),
+            Self::WrongScheme => write!(f, "the url must be of either http or https scheme"),
+            Self::DisallowedDomain => write!(f, "the url can't have localhost as host"),
+            Self::EmptyDomain => write!(f, "the supplied url does not have a host"),
+            Self::ParseErr(e) => write!(f, "failed parsing the url: {e}"),
+        }
+    }
+}
+
+fn validate_url(url: &str) -> Result<(), UrlError> {
+    let url = Url::parse(url).map_err(UrlError::ParseErr)?;
 
     let scheme = url.scheme();
     if scheme != "http" && scheme != "https" {
-        bail!("disallowed URL scheme");
+        return Err(UrlError::WrongScheme);
     }
 
     if !url.username().is_empty() || url.password().is_some() {
-        bail!("userinfo not allowed");
+        return Err(UrlError::ContainsUserinfo);
     }
 
     let domain = url.domain().unwrap_or("");
     if domain.is_empty() {
-        bail!("missing domain");
+        return Err(UrlError::EmptyDomain);
     }
     if domain
         .trim_end_matches(".")
@@ -54,7 +80,7 @@ fn validate_url(url: &str) -> Result<()> {
         || domain.ends_with(".local")
         || !domain.contains('.')
     {
-        bail!("disallowed host");
+        return Err(UrlError::DisallowedDomain);
     }
 
     Ok(())

@@ -7,11 +7,11 @@ use axum::{
 use crate::app::AppState;
 
 pub async fn redirect(State(app): State<AppState>, Path(alias): Path<String>) -> impl IntoResponse {
-    let result = app.get_url(&alias).await;
-
-    if let Ok(url) = result {
-        Redirect::permanent(&url).into_response()
-    } else {
-        (StatusCode::NOT_FOUND).into_response()
+    match app.get_url(&alias).await {
+        Ok(url) => Redirect::permanent(&url).into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "redirect request err");
+            (StatusCode::NOT_FOUND).into_response()
+        }
     }
 }
