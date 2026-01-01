@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE links\n            SET alias = $1\n            WHERE id = $2\n            RETURNING alias\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "alias",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ab7e896fe4ac0b6924a64422f15b6daf82ea527c125d14bd468f25cd61640c7e"
+}

@@ -1,6 +1,7 @@
 -- Create links table
 CREATE TABLE links (
-    alias TEXT PRIMARY KEY,
-    url   TEXT NOT NULL,
+    id BIGSERIAL PRIMARY KEY,
+    alias TEXT UNIQUE,
+    url TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
