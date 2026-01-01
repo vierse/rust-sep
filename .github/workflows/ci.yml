@@ -9,10 +9,25 @@ on:
 
 env: 
   CARGO_TERM_COLOR: always
+  DATABASE_URL: postgres://app_user:app_password@localhost:5432/postgres
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: app_user
+          POSTGRES_PASSWORD: app_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/cache@v4
@@ -29,6 +44,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85.0
         with:
           components: rustfmt, clippy
+      - name: install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features postgres
+      - name: run SQL migrations
+        run: sqlx migrate run
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy
