@@ -26,6 +26,12 @@ pub struct App {
     db: Arc<dyn Database + Send + Sync>,
 }
 
+impl App {
+    pub fn new(db: Arc<dyn Database + Send + Sync>) -> Self {
+        Self { db }
+    }
+}
+
 fn generate_alias() -> String {
     rand::thread_rng()
         .sample_iter(&Alphanumeric)
@@ -70,8 +76,8 @@ impl BaseApp for App {
 }
 
 pub async fn run() -> Result<()> {
-    let db = Arc::new(SqliteDB::new("sqlite:./db.sqlite").await?);
-    let app = Arc::new(App { db });
+    let db: Arc<dyn Database + Send + Sync> = Arc::new(SqliteDB::new("sqlite:./db.sqlite").await?);
+    let app = Arc::new(App::new(db));
     let router = build_router(AppState { app });
 
     let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
