@@ -8,9 +8,7 @@ pub trait Database {
     async fn get(&self, alias: &str) -> Result<String>;
 }
 
-pub struct SqliteDB {
-    
-}
+pub struct SqliteDB {}
 
 impl SqliteDB {
     pub async fn new(_connection_string: &str) -> Result<Self> {

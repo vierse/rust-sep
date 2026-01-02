@@ -54,11 +54,11 @@ impl BaseApp for App {
 
             match self.db.insert(&alias, url).await {
                 Ok(()) => return Ok(alias),
-                Err(e) => {
+                Err(_) => {
                     if self.db.get(&alias).await.is_ok() {
                         continue;
                     }
-                    return Err(e);
+                    continue;
                 }
             }
         }
