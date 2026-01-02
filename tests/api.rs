@@ -73,3 +73,21 @@ async fn shorten_and_redirect() {
         "Redirect location does not match original url"
     );
 }
+
+#[tokio::test]
+async fn test_exists() {
+    let config = config::load().expect("Could not load config");
+    let pool = app::connect_to_db(config.database_url.as_str())
+        .await
+        .expect("Could not connect to DB");
+    let state = app::build_app_state(pool).await.unwrap();
+
+    // test with a nonexistent alias
+    let exists = state.exists("nonexistent_alias").await.unwrap();
+    assert!(!exists, "this alias should not exist");
+
+    // test with an existing alias
+    let alias = state.shorten_url("https://anurl.com").await.unwrap();
+    let exists = state.exists(&alias).await.unwrap();
+    assert!(exists, "this alias should exist");
+}
