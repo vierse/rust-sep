@@ -5,9 +5,9 @@
 
 1. Install [Docker](https://docs.docker.com/get-started/get-docker/).
 
-2. You need to provide `.env` file that defines environment variables for the project. You can just copy `.env.example`:
+2. You need to provide `.env` file that defines environment variables for the project. You can just copy `.env.default`:
 ```
-cp .env.example .env
+cp .env.default .env
 ```
 
 3. Build web UI:
