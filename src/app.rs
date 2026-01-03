@@ -78,22 +78,6 @@ impl AppState {
             None => bail!("This alias does not exist"),
         }
     }
-
-    pub async fn exists(&self, alias: &str) -> Result<bool> {
-        let rec = sqlx::query_scalar::<_, i32>(
-            r#"
-            SELECT 1
-            FROM links
-            WHERE alias = $1
-            "#,
-        )
-        .bind(alias)
-        .fetch_optional(&self.pool)
-        .await
-        .context("connection failed while checking alias existence")?;
-
-        Ok(rec.is_some())
-    }
 }
 
 pub async fn connect_to_db(database_url: &str) -> Result<Pool<Postgres>> {
