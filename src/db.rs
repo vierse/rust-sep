@@ -24,6 +24,4 @@ impl Database {
 
         Ok(rec.rows_affected() > 0)
     }
-
-
 }
