@@ -1,6 +1,5 @@
 use url_shorten::{app, config, db::Database};
 
-
 #[tokio::test]
 async fn test_remove() {
     let config = config::load().expect("Could not load config");
@@ -18,7 +17,6 @@ async fn test_remove() {
     let alias = state.shorten_url("https://an_url.com").await.unwrap();
     let removed = db.remove(&alias).await.unwrap();
     assert!(removed, "should return true for existent alias");
-
 }
 
 #[tokio::test]
@@ -29,7 +27,6 @@ async fn test_insert() {
         .expect("Could not connect to DB");
     let db = Database::new(pool.clone());
     let state = app::build_app_state(pool.clone()).await.unwrap();
-
 
     // cleanup before starting test
     let _ = db.remove("test_alias").await;

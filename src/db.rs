@@ -26,14 +26,12 @@ impl Database {
     }
 
     pub async fn insert(&self, alias: &str, url: &str) -> Result<()> {
-        sqlx::query(
-            "INSERT INTO links (alias, url) VALUES ($1, $2)",
-        )
-        .bind(alias)
-        .bind(url)
-        .execute(&self.pool)
-        .await
-        .context("connection failed while inserting alias")?;
+        sqlx::query("INSERT INTO links (alias, url) VALUES ($1, $2)")
+            .bind(alias)
+            .bind(url)
+            .execute(&self.pool)
+            .await
+            .context("connection failed while inserting alias")?;
 
         Ok(())
     }
