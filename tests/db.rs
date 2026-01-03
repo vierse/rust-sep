@@ -14,7 +14,7 @@ async fn test_remove() {
     assert!(!removed, "should return false for nonexistent alias");
 
     // removing existent alias returns true
-    let alias = state.shorten_url("https://an_url.com").await.unwrap();
+    let alias = state.shorten_url("https://a_url.com").await.unwrap();
     let removed = db.remove(&alias).await.unwrap();
     assert!(removed, "should return true for existent alias");
 }
@@ -31,9 +31,9 @@ async fn test_insert() {
     // cleanup before starting test
     let _ = db.remove("test_alias").await;
 
-    db.insert("test_alias", "https://an_url.com").await.unwrap();
+    state.insert("test_alias", "https://a_url.com").await.unwrap();
     let url = state.get_url("test_alias").await.unwrap();
-    assert_eq!(url, "https://an_url.com", "should return the inserted url");
+    assert_eq!(url, "https://a_url.com", "should return the inserted url");
 
     // cleanup after test
     db.remove("test_alias").await.unwrap();
