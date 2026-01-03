@@ -78,6 +78,17 @@ impl AppState {
             None => bail!("This alias does not exist"),
         }
     }
+    #[tracing::instrument(name = "app::insert", skip(self))]
+    pub async fn insert(&self, alias: &str, url: &str) -> Result<()> {
+        sqlx::query("INSERT INTO links (alias, url) VALUES ($1, $2)")
+            .bind(alias)
+            .bind(url)
+            .execute(&self.pool)
+            .await
+            .context("connection failed while inserting alias")?;
+
+        Ok(())
+    }
 }
 
 pub async fn connect_to_db(database_url: &str) -> Result<Pool<Postgres>> {
