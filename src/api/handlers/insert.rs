@@ -18,7 +18,7 @@ pub async fn insert(
     State(app): State<AppState>,
     Json(InsertRequest { alias, url }): Json<InsertRequest>,
 ) -> impl IntoResponse {
-    if let Err(_) = validate_alias(&alias) {
+    if validate_alias(&alias).is_err() {
         return (StatusCode::BAD_REQUEST).into_response();
     }
     match app.insert(&alias, &url).await {
