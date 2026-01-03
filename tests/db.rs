@@ -31,7 +31,10 @@ async fn test_insert() {
     // cleanup before starting test
     let _ = db.remove("test_alias").await;
 
-    state.insert("test_alias", "https://a_url.com").await.unwrap();
+    state
+        .insert("test_alias", "https://a_url.com")
+        .await
+        .unwrap();
     let url = state.get_url("test_alias").await.unwrap();
     assert_eq!(url, "https://a_url.com", "should return the inserted url");
 
