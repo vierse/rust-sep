@@ -1,45 +1,11 @@
-use anyhow::{Context, Result};
 use sqlx::PgPool;
-use url_shorten::app::AppState;
-use url_shorten::config;
+use url_shorten::app;
 
-async fn setup_test_db() -> Result<PgPool> {
-    let database_url = match std::env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => match config::load() {
-            Ok(settings) => settings.database_url.to_string(),
-            Err(_) => "postgres://app_user:app_password@localhost:5432/app_db".to_string(),
-        },
-    };
-
-    let pool = sqlx::PgPool::connect(&database_url)
+#[sqlx::test]
+async fn test_shorten_url_success(pool: PgPool) {
+    let app = app::build_app_state(pool)
         .await
-        .with_context(|| {
-            format!(
-                "Failed to connect to database at {}. \
-                Make sure PostgreSQL is running and the database is set up. \
-                You can start it with: docker compose up postgres -d",
-                database_url
-            )
-        })?;
-
-    sqlx::query("DELETE FROM links").execute(&pool).await?;
-
-    Ok(pool)
-}
-
-async fn create_app_state() -> Result<AppState> {
-    let pool = setup_test_db().await?;
-    url_shorten::app::build_app_state(pool)
-        .await
-        .context("Failed to build app state")
-}
-
-#[tokio::test]
-async fn test_shorten_url_success() {
-    let app = create_app_state()
-        .await
-        .expect("Database connection required for tests. Run: docker compose up postgres -d");
+        .expect("Failed to initialize app");
 
     let url = "https://www.example.com";
     let result = app.shorten_url(url).await;
@@ -53,11 +19,11 @@ async fn test_shorten_url_success() {
     assert_eq!(retrieved.unwrap(), url);
 }
 
-#[tokio::test]
-async fn test_get_url_success() {
-    let app = create_app_state()
+#[sqlx::test]
+async fn test_get_url_success(pool: PgPool) {
+    let app = app::build_app_state(pool)
         .await
-        .expect("Database connection required for tests. Run: docker compose up postgres -d");
+        .expect("Failed to initialize app");
 
     // Insert a URL using shorten_url to get a valid alias
     let url = "https://www.test.com";
@@ -68,22 +34,22 @@ async fn test_get_url_success() {
     assert_eq!(result.unwrap(), url);
 }
 
-#[tokio::test]
-async fn test_get_url_not_found() {
-    let app = create_app_state()
+#[sqlx::test]
+async fn test_get_url_not_found(pool: PgPool) {
+    let app = app::build_app_state(pool)
         .await
-        .expect("Database connection required for tests. Run: docker compose up postgres -d");
+        .expect("Failed to initialize app");
 
     let result = app.get_url("nonexistent").await;
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("does not exist"));
 }
 
-#[tokio::test]
-async fn test_shorten_url_retry_on_collision() {
-    let app = create_app_state()
+#[sqlx::test]
+async fn test_shorten_url_retry_on_collision(pool: PgPool) {
+    let app = app::build_app_state(pool)
         .await
-        .expect("Database connection required for tests. Run: docker compose up postgres -d");
+        .expect("Failed to initialize app");
 
     for i in 0..100 {
         let url = format!("https://www.example{}.com", i);
@@ -97,11 +63,11 @@ async fn test_shorten_url_retry_on_collision() {
     }
 }
 
-#[tokio::test]
-async fn test_shorten_url_handles_insert_error() {
-    let app = create_app_state()
+#[sqlx::test]
+async fn test_shorten_url_handles_insert_error(pool: PgPool) {
+    let app = app::build_app_state(pool)
         .await
-        .expect("Database connection required for tests. Run: docker compose up postgres -d");
+        .expect("Failed to initialize app");
 
     let url = "https://www.example.com";
     let result = app.shorten_url(url).await;
@@ -109,11 +75,11 @@ async fn test_shorten_url_handles_insert_error() {
     assert!(result.is_ok());
 }
 
-#[tokio::test]
-async fn test_shorten_url_handles_concurrent_insert() {
-    let app = create_app_state()
+#[sqlx::test]
+async fn test_shorten_url_handles_concurrent_insert(pool: PgPool) {
+    let app = app::build_app_state(pool)
         .await
-        .expect("Database connection required for tests. Run: docker compose up postgres -d");
+        .expect("Failed to initialize app");
 
     let url = "https://www.example.com";
     let handles: Vec<_> = (0..10)
@@ -130,11 +96,11 @@ async fn test_shorten_url_handles_concurrent_insert() {
     }
 }
 
-#[tokio::test]
-async fn test_shorten_url_multiple_urls() {
-    let app = create_app_state()
+#[sqlx::test]
+async fn test_shorten_url_multiple_urls(pool: PgPool) {
+    let app = app::build_app_state(pool)
         .await
-        .expect("Database connection required for tests. Run: docker compose up postgres -d");
+        .expect("Failed to initialize app");
 
     let urls = vec![
         "https://www.example1.com",
@@ -162,11 +128,11 @@ async fn test_shorten_url_multiple_urls() {
     }
 }
 
-#[tokio::test]
-async fn test_generate_alias_length() {
-    let app = create_app_state()
+#[sqlx::test]
+async fn test_generate_alias_length(pool: PgPool) {
+    let app = app::build_app_state(pool)
         .await
-        .expect("Database connection required for tests. Run: docker compose up postgres -d");
+        .expect("Failed to initialize app");
 
     for i in 0..10 {
         let url = format!("https://www.example{}.com", i);
@@ -179,11 +145,11 @@ async fn test_generate_alias_length() {
     }
 }
 
-#[tokio::test]
-async fn test_shorten_url_max_retries_exceeded() {
-    let app = create_app_state()
+#[sqlx::test]
+async fn test_shorten_url_max_retries_exceeded(pool: PgPool) {
+    let app = app::build_app_state(pool)
         .await
-        .expect("Database connection required for tests. Run: docker compose up postgres -d");
+        .expect("Failed to initialize app");
 
     let url = "https://www.example.com";
     let alias1 = app.shorten_url(url).await.unwrap();
