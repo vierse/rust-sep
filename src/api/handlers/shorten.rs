@@ -8,6 +8,7 @@ use crate::app::AppState;
 #[derive(Serialize, Deserialize)]
 pub struct ShortenRequest {
     pub url: String,
+    pub name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -17,20 +18,66 @@ pub struct ShortenResponse {
 
 pub async fn shorten(
     State(app): State<AppState>,
-    Json(ShortenRequest { url }): Json<ShortenRequest>,
+    Json(ShortenRequest { url, name }): Json<ShortenRequest>,
 ) -> impl IntoResponse {
     if let Err(e) = validate_url(&url) {
-        tracing::warn!(cause = %e, "URL verification failed");
-        return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+        tracing::warn!(cause = %e, "URL validation failed");
+        return (StatusCode::BAD_REQUEST).into_response();
     }
 
-    match app.shorten_url(&url).await {
-        Ok(alias) => (StatusCode::CREATED, Json(ShortenResponse { alias })).into_response(),
-        Err(e) => {
-            tracing::error!(error = %e, "shorten request err");
-            (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+    match name {
+        // if request contains an alias, validate and save it
+        Some(alias) => {
+            if let Err(e) = validate_alias(&alias) {
+                tracing::warn!(cause = %e, "alias validation failed");
+                return (StatusCode::BAD_REQUEST).into_response();
+            }
+            match app.save_named_url(&alias, &url).await {
+                Ok(()) => (StatusCode::CREATED, Json(ShortenResponse { alias })).into_response(),
+                Err(e) => e.into_response(),
+            }
+        }
+
+        // if request does not contain an alias, generate a new one
+        None => match app.shorten_url(&url).await {
+            Ok(alias) => (StatusCode::CREATED, Json(ShortenResponse { alias })).into_response(),
+            Err(e) => {
+                tracing::error!(error = %e, "shorten request error");
+                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+            }
+        },
+    }
+}
+
+enum AliasError {
+    TooShort,
+    TooLong,
+    InvalidCharacters,
+}
+
+impl std::fmt::Display for AliasError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TooShort => write!(f, "alias is too short"),
+            Self::TooLong => write!(f, "alias is too long"),
+            Self::InvalidCharacters => write!(f, "alias contains invalid characters"),
         }
     }
+}
+
+fn validate_alias(alias: &str) -> Result<(), AliasError> {
+    const MIN_ALIAS_LENGTH: usize = 6;
+    const MAX_ALIAS_LENGTH: usize = 20;
+    if alias.len() < MIN_ALIAS_LENGTH {
+        return Err(AliasError::TooShort);
+    }
+    if alias.len() > MAX_ALIAS_LENGTH {
+        return Err(AliasError::TooLong);
+    }
+    if alias.contains(|c: char| !c.is_alphanumeric()) {
+        return Err(AliasError::InvalidCharacters);
+    }
+    Ok(())
 }
 
 /// encountered an Error while validating a url
@@ -143,5 +190,17 @@ mod test {
                 result
             );
         }
+    }
+
+    #[test]
+    fn allowed_aliases() {
+        // a simple test that ensures a correct alias passes validate_alias
+        todo!()
+    }
+
+    #[test]
+    fn disallowed_aliases() {
+        // a list of aliases that should be disallowed by validate_alias
+        todo!()
     }
 }

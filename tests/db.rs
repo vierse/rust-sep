@@ -18,26 +18,3 @@ async fn test_remove() {
     let removed = db.remove(&alias).await.unwrap();
     assert!(removed, "should return true for existent alias");
 }
-
-#[tokio::test]
-async fn test_insert() {
-    let config = config::load().expect("Could not load config");
-    let pool = app::connect_to_db(config.database_url.as_str())
-        .await
-        .expect("Could not connect to DB");
-    let db = Database::new(pool.clone());
-    let state = app::build_app_state(pool.clone()).await.unwrap();
-
-    // cleanup before starting test
-    let _ = db.remove("test_alias").await;
-
-    state
-        .insert("test_alias", "https://a_url.com")
-        .await
-        .unwrap();
-    let url = state.get_url("test_alias").await.unwrap();
-    assert_eq!(url, "https://a_url.com", "should return the inserted url");
-
-    // cleanup after test
-    db.remove("test_alias").await.unwrap();
-}

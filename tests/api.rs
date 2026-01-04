@@ -73,3 +73,15 @@ async fn shorten_and_redirect() {
         "Redirect location does not match original url"
     );
 }
+
+#[tokio::test]
+async fn save_named_and_redirect() {
+    // similar to shorten_and_redirect() but providing "name" in request body
+    todo!()
+}
+
+#[tokio::test]
+async fn save_named_already_exists() {
+    // trying to insert an alias that already exists should fail with the correct status code
+    todo!()
+}
