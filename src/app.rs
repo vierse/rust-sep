@@ -88,13 +88,17 @@ impl AppState {
         Ok(alias)
     }
 
+    /// queries a url, directly updating the hitcount
+    /// # Errors
+    /// fails if the requested alias does not exist in the database
     #[tracing::instrument(name = "app::get_url", skip(self))]
     pub async fn get_url(&self, alias: &str) -> Result<String> {
         let rec = sqlx::query!(
             r#"
-            SELECT url
-            FROM links
+            UPDATE links
+            SET hitcount = hitcount + 1
             WHERE alias = $1
+            RETURNING url
             "#,
             alias
         )
