@@ -7,12 +7,17 @@ import { eventReducer, type AppState, type Model } from './model';
  * @param signal abort signal to cancel the request
  * @returns Fully qualified shortened URL
  */
-async function shortenUrl(url: string, signal: AbortSignal): Promise<string> {
+async function shortenUrl(url: string, signal: AbortSignal, name?: string): Promise<string> {
+
+  const body = {
+    url,
+    ...(name && { name }),
+  };
 
   const result = await fetch("/api/shorten", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify(body),
     signal,
   });
   if (!result.ok) throw new Error(`Request error (${result.status})`);
@@ -27,7 +32,7 @@ async function shortenUrl(url: string, signal: AbortSignal): Promise<string> {
  * Initial model used by {@link useAppController}
  */
 const initModel: Model = {
-  state: { userInput: "", result: { kind: "none" } },
+  state: { userUrl: "", userAlias: "", result: { kind: "none" } },
   effects: [],
 }
 
@@ -35,7 +40,8 @@ const initModel: Model = {
  * Event callbacks for the view layer.
  */
 export type ViewEvents = {
-  onInput: (url: string) => void;
+  onUrlInput: (url: string) => void;
+  onAliasInput: (url: string) => void;
   onSubmit: () => void;
   onRetry: () => void;
   onClear: () => void;
@@ -94,7 +100,7 @@ export function useAppController(): {
               const timeoutId = setTimeout(() => ac.abort(), 5_000);
 
               try {
-                const shortUrl = await shortenUrl(effect.url, ac.signal);
+                const shortUrl = await shortenUrl(effect.url, ac.signal, effect.name);
                 dispatch({ kind: "requestOk", shortUrl });
               } catch (err) {
                 if (err instanceof DOMException && err.name === "AbortError") {
@@ -105,6 +111,7 @@ export function useAppController(): {
                 }
               } finally {
                 clearTimeout(timeoutId);
+                runningRef.current = false;
               }
               break;
             }
@@ -134,7 +141,8 @@ export function useAppController(): {
    */
   const events: ViewEvents = React.useMemo(
     () => ({
-      onInput: (input: string) => dispatch({ kind: "setInput", input }),
+      onUrlInput: (input: string) => dispatch({ kind: "setUrl", input }),
+      onAliasInput: (input: string) => dispatch({ kind: "setAlias", input }),
       onSubmit: () => dispatch({ kind: "submit" }),
       onRetry: () => dispatch({ kind: "retry" }),
       onClear: () => dispatch({ kind: "clear" }),
