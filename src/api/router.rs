@@ -13,7 +13,6 @@ pub fn build_router(state: AppState) -> Router {
 
     Router::new()
         .route("/api/shorten", post(handlers::shorten))
-        .route("/api/insert", post(handlers::insert))
         .route("/r/{alias}", get(handlers::redirect))
         .with_state(state)
         .fallback_service(serve)
