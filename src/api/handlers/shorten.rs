@@ -48,7 +48,7 @@ pub async fn shorten(
         },
     }
 }
-
+#[derive(Debug, PartialEq, Eq)]
 enum AliasError {
     TooShort,
     TooLong,
@@ -194,13 +194,45 @@ mod test {
 
     #[test]
     fn allowed_aliases() {
-        // a simple test that ensures a correct alias passes validate_alias
-        todo!()
+        let aliases = ["abcdef", "abcde1234567890", "abcde12345678901234"];
+        for alias in aliases {
+            let result = validate_alias(alias);
+            assert!(
+                result.is_ok(),
+                "{} should be allowed, instead: {:?}",
+                alias,
+                result
+            );
+        }
     }
 
-    #[test]
-    fn disallowed_aliases() {
-        // a list of aliases that should be disallowed by validate_alias
-        todo!()
+    // a simple test that ensures a correct alias passes validate_alias
+}
+
+#[test]
+fn disallowed_aliases() {
+    let aliases = [
+        "",
+        "a",
+        "abcde",
+        "abcde12345678901234567890",
+        "abcde1234567890!@#$%",
+        "ab-cde",
+        "ab_cde",
+        "ab.cde",
+        "ab&cde",
+        "ab cde",
+        "ab/cde",
+    ];
+    for alias in aliases {
+        let result = validate_alias(alias);
+        assert!(
+            result.is_err(),
+            "{} should not be allowed, instead: {:?}",
+            alias,
+            result
+        );
     }
+
+    // a list of aliases that should be disallowed by validate_alias
 }

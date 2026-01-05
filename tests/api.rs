@@ -24,6 +24,10 @@ async fn router() -> Router {
     let pool = app::connect_to_db(config.database_url.as_str())
         .await
         .expect("Could not connect to DB");
+    sqlx::query("TRUNCATE links RESTART IDENTITY")
+        .execute(&pool)
+        .await
+        .expect("Could not reset links table");
     let state = app::build_app_state(pool).await.unwrap();
     api::build_router(state)
 }
@@ -77,11 +81,88 @@ async fn shorten_and_redirect() {
 #[tokio::test]
 async fn save_named_and_redirect() {
     // similar to shorten_and_redirect() but providing "name" in request body
-    todo!()
+    const TEST_URL: &str = "https://example.com";
+    const TEST_ALIAS: &str = "testalias";
+
+    let router = router().await;
+
+    // Make a POST request to /api/shorten
+    let request_body =
+        Body::from(serde_json::to_vec(&json!({ "url": TEST_URL, "name": TEST_ALIAS })).unwrap());
+    let request = Request::post("/api/shorten")
+        .header("content-type", "application/json")
+        .body(request_body)
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::CREATED,
+        "Request to shorten {TEST_URL} failed"
+    );
+
+    // Parse the returned alias
+    let api::handlers::ShortenResponse { alias } = json(response).await;
+    assert_eq!(alias, TEST_ALIAS, "Response alias does not match request");
+
+    // Make a GET request to /r/{alias}
+    let request_body = Body::empty();
+    let request = Request::get(format!("/r/{alias}"))
+        .body(request_body)
+        .unwrap();
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::PERMANENT_REDIRECT,
+        "Redirect request to /r/{alias} failed"
+    );
+    // Check that the redirect location is set to our url
+    assert_eq!(
+        response
+            .headers()
+            .get(axum::http::header::LOCATION)
+            .unwrap(),
+        TEST_URL,
+        "Redirect location does not match original url"
+    );
 }
 
 #[tokio::test]
 async fn save_named_already_exists() {
-    // trying to insert an alias that already exists should fail with the correct status code
-    todo!()
+    const TEST_URL: &str = "https://example.com";
+    const TEST_URL2: &str = "https://example2.com";
+    const TEST_ALIAS: &str = "testalias2";
+
+    let router = router().await;
+
+    let request_body =
+        Body::from(serde_json::to_vec(&json!({"url": TEST_URL, "name": TEST_ALIAS })).unwrap());
+    // Make a POST request to /api/shorten
+
+    let request = Request::post("/api/shorten")
+        .header("content-type", "application/json")
+        .body(request_body)
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::CREATED,
+        "Request to shorten {TEST_URL} failed"
+    );
+    // second insert with same alias
+    let request_body =
+        Body::from(serde_json::to_vec(&json!({"url": TEST_URL2, "name": TEST_ALIAS})).unwrap());
+    let request = Request::post("/api/shorten")
+        .header("content-type", "application/json")
+        .body(request_body)
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::CONFLICT,
+        "Request to shorten {TEST_URL} failed"
+    );
 }
