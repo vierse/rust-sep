@@ -38,9 +38,10 @@ async fn test_get_url_not_found(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn test_shorten_url_retry_on_collision(pool: PgPool) {
-    let app = setup_app(pool, "test_shorten_url_retry_on_collision").await;
+async fn test_shorten_url_stress_test(pool: PgPool) {
+    let app = setup_app(pool, "test_shorten_url_stress_test").await;
 
+    let mut aliases = Vec::new();
     for i in 0..100 {
         let url = format!("https://www.example{}.com", i);
         let result = app.shorten_url(&url).await;
@@ -49,6 +50,25 @@ async fn test_shorten_url_retry_on_collision(pool: PgPool) {
             "Failed to shorten URL {}: {:?}",
             i,
             result.err()
+        );
+        aliases.push((result.unwrap(), url));
+    }
+
+    let alias_set: std::collections::HashSet<_> = aliases.iter().map(|(alias, _)| alias).collect();
+    assert_eq!(
+        alias_set.len(),
+        aliases.len(),
+        "All aliases should be unique"
+    );
+
+    for (alias, expected_url) in &aliases {
+        let retrieved = app
+            .get_url(alias)
+            .await
+            .expect("Should be able to retrieve URL");
+        assert_eq!(
+            retrieved, *expected_url,
+            "Alias should resolve to correct URL"
         );
     }
 }
@@ -66,15 +86,38 @@ async fn test_shorten_url_handles_concurrent_insert(pool: PgPool) {
         })
         .collect();
 
+    let mut aliases = Vec::new();
     for handle in handles {
-        let result = handle.await;
-        assert!(result.unwrap().is_ok());
+        let result = handle.await.expect("Join handle should succeed");
+        let alias = result.expect("Shorten URL should succeed");
+        aliases.push(alias);
+    }
+
+    // Verify all aliases are unique using HashSet for O(n) instead of O(n²)
+    let alias_set: std::collections::HashSet<_> = aliases.iter().collect();
+    assert_eq!(
+        alias_set.len(),
+        aliases.len(),
+        "Concurrent inserts should produce unique aliases"
+    );
+
+    // Verify all aliases resolve to the same URL
+    for alias in &aliases {
+        let retrieved = app
+            .get_url(alias)
+            .await
+            .expect("Should be able to retrieve URL");
+        assert_eq!(retrieved, url, "All aliases should resolve to the same URL");
     }
 }
 
 #[sqlx::test]
-async fn test_shorten_url_multiple_urls(pool: PgPool) {
-    let app = setup_app(pool, "test_shorten_url_multiple_urls").await;
+async fn test_shorten_url_different_urls_produce_unique_aliases(pool: PgPool) {
+    let app = setup_app(
+        pool,
+        "test_shorten_url_different_urls_produce_unique_aliases",
+    )
+    .await;
 
     let urls = vec![
         "https://www.example1.com",
@@ -85,22 +128,25 @@ async fn test_shorten_url_multiple_urls(pool: PgPool) {
     let mut aliases = Vec::new();
     for url in &urls {
         let result = app.shorten_url(url).await;
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "Failed to shorten URL: {}", url);
         aliases.push(result.unwrap());
     }
 
-    // Verify all aliases are unique
-    for i in 0..aliases.len() {
-        for j in (i + 1)..aliases.len() {
-            assert_ne!(aliases[i], aliases[j], "Aliases should be unique");
-        }
-    }
+    // Verify all aliases are unique using HashSet for O(n) instead of O(n²)
+    let alias_set: std::collections::HashSet<_> = aliases.iter().collect();
+    assert_eq!(
+        alias_set.len(),
+        aliases.len(),
+        "Different URLs should produce unique aliases"
+    );
 
-    // Verify we can retrieve all URLs
+    // Verify all aliases resolve to correct URLs
     for (alias, url) in aliases.iter().zip(urls.iter()) {
-        let retrieved = app.get_url(alias).await;
-        assert!(retrieved.is_ok());
-        assert_eq!(retrieved.unwrap(), *url);
+        let retrieved = app
+            .get_url(alias)
+            .await
+            .expect("Should be able to retrieve URL");
+        assert_eq!(retrieved, *url, "Alias should resolve to correct URL");
     }
 }
 
@@ -108,17 +154,15 @@ async fn test_shorten_url_multiple_urls(pool: PgPool) {
 async fn test_shorten_url_allows_duplicate_urls(pool: PgPool) {
     let app = setup_app(pool, "test_shorten_url_allows_duplicate_urls").await;
 
-    // Test that the same URL can be shortened multiple times
-    // (system allows duplicates, each gets a different alias)
     let url = "https://www.example.com";
     let alias1 = app.shorten_url(url).await.unwrap();
     let alias2 = app.shorten_url(url).await.unwrap();
 
-    // Both should succeed and be valid
-    assert!(app.get_url(&alias1).await.is_ok());
-    assert!(app.get_url(&alias2).await.is_ok());
+    assert_ne!(
+        alias1, alias2,
+        "Duplicate URLs should produce different aliases"
+    );
 
-    // Both should point to the same URL
     assert_eq!(app.get_url(&alias1).await.unwrap(), url);
     assert_eq!(app.get_url(&alias2).await.unwrap(), url);
 }
