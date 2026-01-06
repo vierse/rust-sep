@@ -156,6 +156,6 @@ async fn save_named_already_exists(pool: PgPool) {
     assert_eq!(
         response.status(),
         StatusCode::CONFLICT,
-        "Request to shorten {TEST_URL} failed"
+        "Shorten request unexpectedly succeeded for an existing alias"
     );
 }
