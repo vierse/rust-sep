@@ -5,8 +5,8 @@ use axum::{
 };
 use serde::de::DeserializeOwned;
 use serde_json::json;
-use tower::ServiceExt;
 use sqlx::PgPool;
+use tower::ServiceExt;
 
 use axum::Router;
 
@@ -26,9 +26,8 @@ async fn router(pool: PgPool) -> Router {
 }
 
 #[sqlx::test]
-async fn shorten_and_redirect(pool:PgPool) {
+async fn shorten_and_redirect(pool: PgPool) {
     const TEST_URL: &str = "https://example.com";
-
 
     let router = router(pool).await;
 
@@ -80,7 +79,6 @@ async fn save_named_and_redirect(pool: PgPool) {
 
     let router = router(pool).await;
 
-
     // Make a POST request to /api/shorten
     let request_body =
         Body::from(serde_json::to_vec(&json!({ "url": TEST_URL, "name": TEST_ALIAS })).unwrap());
@@ -122,7 +120,6 @@ async fn save_named_and_redirect(pool: PgPool) {
         "Redirect location does not match original url"
     );
 }
-
 
 #[sqlx::test]
 async fn save_named_already_exists(pool: PgPool) {
