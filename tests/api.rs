@@ -6,10 +6,11 @@ use axum::{
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use tower::ServiceExt;
+use sqlx::PgPool;
 
 use axum::Router;
 
-use url_shorten::{api, app, config};
+use url_shorten::{api, app};
 
 // Deserialize a Response into T
 async fn json<T: DeserializeOwned>(response: Response) -> T {
@@ -19,24 +20,17 @@ async fn json<T: DeserializeOwned>(response: Response) -> T {
     serde_json::from_slice(&bytes).unwrap()
 }
 
-async fn router() -> Router {
-    let config = config::load().expect("Could not load config");
-    let pool = app::connect_to_db(config.database_url.as_str())
-        .await
-        .expect("Could not connect to DB");
-    sqlx::query("TRUNCATE links RESTART IDENTITY")
-        .execute(&pool)
-        .await
-        .expect("Could not reset links table");
+async fn router(pool: PgPool) -> Router {
     let state = app::build_app_state(pool).await.unwrap();
     api::build_router(state)
 }
 
-#[tokio::test]
-async fn shorten_and_redirect() {
+#[sqlx::test]
+async fn shorten_and_redirect(pool:PgPool) {
     const TEST_URL: &str = "https://example.com";
 
-    let router = router().await;
+
+    let router = router(pool).await;
 
     // Make a POST request to /api/shorten
     let request_body = Body::from(serde_json::to_vec(&json!({ "url": TEST_URL })).unwrap());
@@ -78,13 +72,14 @@ async fn shorten_and_redirect() {
     );
 }
 
-#[tokio::test]
-async fn save_named_and_redirect() {
+#[sqlx::test]
+async fn save_named_and_redirect(pool: PgPool) {
     // similar to shorten_and_redirect() but providing "name" in request body
     const TEST_URL: &str = "https://example.com";
     const TEST_ALIAS: &str = "testalias";
 
-    let router = router().await;
+    let router = router(pool).await;
+
 
     // Make a POST request to /api/shorten
     let request_body =
@@ -128,13 +123,14 @@ async fn save_named_and_redirect() {
     );
 }
 
-#[tokio::test]
-async fn save_named_already_exists() {
+
+#[sqlx::test]
+async fn save_named_already_exists(pool: PgPool) {
     const TEST_URL: &str = "https://example.com";
     const TEST_URL2: &str = "https://example2.com";
     const TEST_ALIAS: &str = "testalias2";
 
-    let router = router().await;
+    let router = router(pool).await;
 
     let request_body =
         Body::from(serde_json::to_vec(&json!({"url": TEST_URL, "name": TEST_ALIAS })).unwrap());
