@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -166,6 +166,51 @@ impl AppState {
             Some(_) => Ok(()),
             None => Err(AppError::AlreadyExists(alias.to_string())),
         }
+    }
+
+    #[tracing::instrument(name = "app::get_recent_hits", skip(self))]
+    pub async fn get_recent_hits(&self, alias: &str) -> Result<u64> {
+        let rec = sqlx::query!(
+            r#"
+            SELECT COUNT(*)
+            FROM recent_hits
+            WHERE link_id IN (
+                SELECT id
+                FROM links
+                WHERE alias = $1
+            )
+            "#,
+            alias
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        rec.count
+            .ok_or(anyhow!(
+                "fetching the number of recent hits for link {alias} returned None"
+            ))
+            .map(|c| c as u64)
+    }
+
+    #[tracing::instrument(name = "app::get_last_hit", skip(self))]
+    pub async fn get_last_hit(&self, alias: &str) -> Result<OffsetDateTime> {
+        let rec = sqlx::query!(
+            r#"
+            SELECT MAX(accessed_at)
+            FROM recent_hits
+            WHERE link_id IN (
+                SELECT id
+                FROM links
+                WHERE alias = $1
+            )
+            "#,
+            alias
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        rec.max
+            .ok_or(anyhow!("link {alias} hasn't been accesed yet"))
     }
 }
 
