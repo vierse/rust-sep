@@ -1,5 +1,5 @@
 use sqlx::PgPool;
-use url_shorten::app;
+use url_shorten::app::{self, AppError};
 
 async fn setup_app(pool: PgPool, test_name: &str) -> app::AppState {
     app::build_app_state(pool)
@@ -33,8 +33,12 @@ async fn test_get_url_not_found(pool: PgPool) {
     let app = setup_app(pool, "test_get_url_not_found").await;
 
     let result = app.get_url("nonexistent").await;
-    assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("does not exist"));
+    match result {
+        Err(AppError::NotExists(name)) => {
+            assert_eq!(name, "nonexistent");
+        }
+        other => panic!("unexpected error: {:?}", other),
+    }
 }
 
 #[sqlx::test]

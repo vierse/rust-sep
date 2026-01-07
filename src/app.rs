@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -17,10 +17,12 @@ pub struct AppState {
     sqids: Sqids,
 }
 
+#[derive(Debug)]
 pub enum AppError {
     AlreadyExists(String),
     NotExists(String),
     DatabaseError(sqlx::Error),
+    Other(anyhow::Error),
 }
 
 impl IntoResponse for AppError {
@@ -38,14 +40,19 @@ impl IntoResponse for AppError {
                 tracing::error!(error = %e, "database error");
                 (StatusCode::INTERNAL_SERVER_ERROR).into_response()
             }
+            AppError::Other(e) => {
+                tracing::error!(error = %e, "unknown error");
+                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+            }
         }
     }
 }
 
 impl AppState {
     #[tracing::instrument(name = "app::shorten_url", skip(self))]
-    pub async fn shorten_url(&self, url: &str) -> Result<String> {
-        let mut tx: Transaction<Postgres> = self.pool.begin().await?;
+    pub async fn shorten_url(&self, url: &str) -> Result<String, AppError> {
+        let mut tx: Transaction<Postgres> =
+            self.pool.begin().await.map_err(AppError::DatabaseError)?;
 
         // Insert the url into database to get a unique id
         let rec = sqlx::query!(
@@ -58,11 +65,15 @@ impl AppState {
         )
         .fetch_one(&mut *tx)
         .await
-        .context("DB insert url query failed")?;
+        .map_err(AppError::DatabaseError)?;
 
         let id = rec.id as u64;
 
-        let alias = self.sqids.encode(&[id])?;
+        let alias = self
+            .sqids
+            .encode(&[id])
+            .context("Sqids alphabet was exhausted")
+            .map_err(AppError::Other)?;
 
         // Update the record with generated alias
         let updated = sqlx::query!(
@@ -77,19 +88,20 @@ impl AppState {
         )
         .fetch_one(&mut *tx)
         .await
-        .context("DB update url query failed")?;
+        .map_err(AppError::DatabaseError)?;
 
-        tx.commit()
-            .await
-            .context("DB failed to commit transaction")?;
+        tx.commit().await.map_err(AppError::DatabaseError)?;
 
-        let alias = updated.alias.context("Alias was not set after update")?;
+        let alias = updated
+            .alias
+            .context("Updated record contained no alias")
+            .map_err(AppError::Other)?;
 
         Ok(alias)
     }
 
     #[tracing::instrument(name = "app::get_url", skip(self))]
-    pub async fn get_url(&self, alias: &str) -> Result<String> {
+    pub async fn get_url(&self, alias: &str) -> Result<String, AppError> {
         let rec = sqlx::query!(
             r#"
             SELECT url
@@ -100,11 +112,11 @@ impl AppState {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("DB select query failed")?;
+        .map_err(AppError::DatabaseError)?;
 
         match rec {
             Some(r) => Ok(r.url),
-            None => bail!("This alias does not exist"),
+            None => Err(AppError::NotExists(alias.to_string())),
         }
     }
 
