@@ -22,7 +22,7 @@ async fn json<T: DeserializeOwned>(response: Response) -> T {
 
 async fn router(pool: PgPool) -> Router {
     let state = app::build_app_state(pool).await.unwrap();
-    api::build_router(state)
+    api::build_router(state.into())
 }
 
 #[sqlx::test]

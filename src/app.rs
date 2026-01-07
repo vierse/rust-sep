@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, bail};
 use axum::{
@@ -6,8 +6,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use sqids::Sqids;
-use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions};
-use tokio::net::TcpListener;
+use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions, types::time::OffsetDateTime};
+use tokio::{net::TcpListener, select};
 
 use crate::{api, config::Settings};
 
@@ -93,23 +93,57 @@ impl AppState {
     /// fails if the requested alias does not exist in the database
     #[tracing::instrument(name = "app::get_url", skip(self))]
     pub async fn get_url(&self, alias: &str) -> Result<String> {
-        let rec = sqlx::query!(
+        let mut tx: Transaction<Postgres> = self.pool.begin().await?;
+        let link = sqlx::query!(
             r#"
             UPDATE links
             SET hitcount = hitcount + 1
             WHERE alias = $1
-            RETURNING url
+            RETURNING url, id
             "#,
             alias
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(tx.as_mut())
         .await
         .context("DB select query failed")?;
 
-        match rec {
-            Some(r) => Ok(r.url),
-            None => bail!("This alias does not exist"),
-        }
+        let Some(link) = link else {
+            bail!("This alias does not exist");
+        };
+
+        sqlx::query!(
+            r#"
+            INSERT INTO recent_hits (link_id)
+            VALUES ($1)
+            "#,
+            link.id
+        )
+        .execute(tx.as_mut())
+        .await
+        .context("inserting link access into DB failed")?;
+
+        tx.commit()
+            .await
+            .context("DB failed to commit transaction")?;
+
+        Ok(link.url)
+    }
+
+    /// clears hits older than the given time, returning the number of hits purged
+    #[tracing::instrument(name = "app::clear_hits_older", skip(self))]
+    pub async fn clear_hits_older(&self, time: OffsetDateTime) -> Result<u64> {
+        let affected_rows = sqlx::query!(
+            r#"
+            DELETE FROM recent_hits
+            where accessed_at < $1
+            "#,
+            time
+        )
+        .execute(&self.pool)
+        .await
+        .map(|res| res.rows_affected())?;
+
+        Ok(affected_rows)
     }
 
     #[tracing::instrument(name = "app::save_named_url", skip(self))]
@@ -166,16 +200,27 @@ pub async fn build_app_state(pool: Pool<Postgres>) -> Result<AppState> {
     Ok(AppState { pool, sqids })
 }
 
+pub async fn clear_hits(app: &AppState) -> Result<()> {
+    loop {
+        let before_last_sleep = OffsetDateTime::now_utc();
+        // sleep for 30 days
+        tokio::time::sleep(Duration::from_hours(30 * 24)).await;
+        app.clear_hits_older(before_last_sleep).await?;
+    }
+}
+
 pub async fn run(config: Settings) -> Result<()> {
     let pool = connect_to_db(config.database_url.as_str()).await?;
-    let state = build_app_state(pool).await?;
-    let router = api::build_router(state);
+    let state = Arc::new(build_app_state(pool).await?);
+    let router = api::build_router(state.clone());
 
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = TcpListener::bind(&addr).await?;
 
     tracing::info!("App running on {addr}");
-    axum::serve(listener, router).await?;
 
-    Ok(())
+    select! {
+        res = axum::serve(listener, router) => res.map_err(anyhow::Error::from),
+        res = clear_hits(state.as_ref()) => res,
+    }
 }

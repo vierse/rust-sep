@@ -1,6 +1,7 @@
 use anyhow::Result;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use url::Url;
 
 use crate::app::AppState;
@@ -17,7 +18,7 @@ pub struct ShortenResponse {
 }
 
 pub async fn shorten(
-    State(app): State<AppState>,
+    State(app): State<Arc<AppState>>,
     Json(ShortenRequest { url, name }): Json<ShortenRequest>,
 ) -> impl IntoResponse {
     if let Err(e) = validate_url(&url) {
