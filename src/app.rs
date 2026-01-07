@@ -1,6 +1,10 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use sqids::Sqids;
 use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
@@ -11,6 +15,31 @@ use crate::{api, config::Settings};
 pub struct AppState {
     pool: Pool<Postgres>,
     sqids: Sqids,
+}
+
+pub enum AppError {
+    AlreadyExists(String),
+    NotExists(String),
+    DatabaseError(sqlx::Error),
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        match self {
+            AppError::AlreadyExists(alias) => {
+                tracing::warn!(cause = %alias, "alias already exists");
+                (StatusCode::CONFLICT).into_response()
+            }
+            AppError::NotExists(alias) => {
+                tracing::warn!(cause = %alias, "alias does not exist");
+                (StatusCode::NOT_FOUND).into_response()
+            }
+            AppError::DatabaseError(e) => {
+                tracing::error!(error = %e, "database error");
+                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+            }
+        }
+    }
 }
 
 impl AppState {
@@ -76,6 +105,28 @@ impl AppState {
         match rec {
             Some(r) => Ok(r.url),
             None => bail!("This alias does not exist"),
+        }
+    }
+
+    #[tracing::instrument(name = "app::save_named_url", skip(self))]
+    pub async fn save_named_url(&self, alias: &str, url: &str) -> Result<(), AppError> {
+        let rec = sqlx::query!(
+            r#"
+            INSERT INTO links (alias, url)
+            VALUES ($1, $2)
+            ON CONFLICT (alias) DO NOTHING
+            RETURNING id
+            "#,
+            alias,
+            url
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(AppError::DatabaseError)?;
+
+        match rec {
+            Some(_) => Ok(()),
+            None => Err(AppError::AlreadyExists(alias.to_string())),
         }
     }
 }
