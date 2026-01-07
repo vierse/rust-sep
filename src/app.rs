@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -17,10 +17,12 @@ pub struct AppState {
     sqids: Sqids,
 }
 
+#[derive(Debug)]
 pub enum AppError {
     AlreadyExists(String),
     NotExists(String),
     DatabaseError(sqlx::Error),
+    Other(anyhow::Error),
 }
 
 impl IntoResponse for AppError {
@@ -36,6 +38,10 @@ impl IntoResponse for AppError {
             }
             AppError::DatabaseError(e) => {
                 tracing::error!(error = %e, "database error");
+                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
+            }
+            AppError::Other(e) => {
+                tracing::error!(error = %e, "unknown error");
                 (StatusCode::INTERNAL_SERVER_ERROR).into_response()
             }
         }
@@ -97,12 +103,9 @@ impl std::error::Error for GetUrlError {
 
 impl AppState {
     #[tracing::instrument(name = "app::shorten_url", skip(self))]
-    pub async fn shorten_url(
-        &self,
-        url: &str,
-        expires_at: Option<OffsetDateTime>,
-    ) -> Result<String> {
-        let mut tx: Transaction<Postgres> = self.pool.begin().await?;
+    pub async fn shorten_url(&self, url: &str) -> Result<String, AppError> {
+        let mut tx: Transaction<Postgres> =
+            self.pool.begin().await.map_err(AppError::DatabaseError)?;
 
         // Insert the url into database to get a unique id
         let rec = sqlx::query!(
@@ -116,11 +119,15 @@ impl AppState {
         )
         .fetch_one(&mut *tx)
         .await
-        .context("DB insert url query failed")?;
+        .map_err(AppError::DatabaseError)?;
 
         let id = rec.id as u64;
 
-        let alias = self.sqids.encode(&[id])?;
+        let alias = self
+            .sqids
+            .encode(&[id])
+            .context("Sqids alphabet was exhausted")
+            .map_err(AppError::Other)?;
 
         // Update the record with generated alias
         let updated = sqlx::query!(
@@ -135,13 +142,14 @@ impl AppState {
         )
         .fetch_one(&mut *tx)
         .await
-        .context("DB update url query failed")?;
+        .map_err(AppError::DatabaseError)?;
 
-        tx.commit()
-            .await
-            .context("DB failed to commit transaction")?;
+        tx.commit().await.map_err(AppError::DatabaseError)?;
 
-        let alias = updated.alias.context("Alias was not set after update")?;
+        let alias = updated
+            .alias
+            .context("Updated record contained no alias")
+            .map_err(AppError::Other)?;
 
         Ok(alias)
     }
@@ -150,9 +158,8 @@ impl AppState {
     /// # Errors
     /// fails if the requested alias does not exist in the database or if the link has expired
     #[tracing::instrument(name = "app::get_url", skip(self))]
-    pub async fn get_url(&self, alias: &str) -> std::result::Result<String, GetUrlError> {
-        // First fetch the link to check expiration
-        let link = sqlx::query!(
+    pub async fn get_url(&self, alias: &str) -> Result<String, AppError> {
+        let rec = sqlx::query!(
             r#"
             SELECT url, id, expires_at
             FROM links
@@ -162,43 +169,11 @@ impl AppState {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(GetUrlError::DBErr)?;
+        .map_err(AppError::DatabaseError)?;
 
-        let Some(link) = link else {
-            return Err(GetUrlError::AliasNotFount);
-        };
-
-        // Check if link has expired
-        if let Some(expires_at) = link.expires_at {
-            if expires_at <= OffsetDateTime::now_utc() {
-                return Err(GetUrlError::LinkExpired);
-            }
-        }
-
-        // Update hitcount and last_access only if not expired
-        sqlx::query!(
-            r#"
-            UPDATE links
-            SET hitcount = hitcount + 1, last_access = now()
-            WHERE id = $1
-            "#,
-            link.id
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(GetUrlError::DBErr)?;
-
-        if let Err(db_err) = sqlx::query!(
-            r#"
-            INSERT INTO recent_hits (link_id)
-            VALUES ($1)
-            "#,
-            link.id
-        )
-        .execute(&self.pool)
-        .await
-        {
-            return Err(GetUrlError::HitLogFail(link.url, db_err));
+        match rec {
+            Some(r) => Ok(r.url),
+            None => Err(AppError::NotExists(alias.to_string())),
         }
 
         Ok(link.url)

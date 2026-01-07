@@ -60,10 +60,7 @@ pub async fn shorten(
         // if request does not contain an alias, generate a new one
         None => match app.shorten_url(&url, Some(expires_at)).await {
             Ok(alias) => (StatusCode::CREATED, Json(ShortenResponse { alias })).into_response(),
-            Err(e) => {
-                tracing::error!(error = %e, "shorten request error");
-                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-            }
+            Err(e) => e.into_response(),
         },
     }
 }
