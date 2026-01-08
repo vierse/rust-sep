@@ -249,7 +249,7 @@ pub async fn clear_hits(app: &AppState) -> Result<()> {
     loop {
         let before_last_sleep = OffsetDateTime::now_utc();
         // sleep for 30 days
-        tokio::time::sleep(Duration::from_hours(30 * 24)).await;
+        tokio::time::sleep(Duration::from_secs(30 * 24 * 60 * 60)).await;
         app.clear_hits_older(before_last_sleep).await?;
     }
 }
