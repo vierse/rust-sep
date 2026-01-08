@@ -1,3 +1,4 @@
+use anyhow::Result;
 use sqlx::PgPool;
 use url_shorten::app;
 
@@ -165,4 +166,40 @@ async fn test_shorten_url_allows_duplicate_urls(pool: PgPool) {
 
     assert_eq!(app.get_url(&alias1).await.unwrap(), url);
     assert_eq!(app.get_url(&alias2).await.unwrap(), url);
+}
+
+#[sqlx::test]
+async fn test_get_last_hit(pool: PgPool) -> Result<()> {
+    let app = setup_app(pool, "test_get_last_hit").await;
+
+    let url = "https://www.example.com";
+    let alias = app.shorten_url(url).await.unwrap();
+
+    // just do a very rudimentery test, since I don't want to mess with sleeping in tests
+    app.get_url(&alias).await?;
+    let first_acces = app.get_last_hit(&alias).await?;
+    app.get_url(&alias).await?;
+    let last_acces = app.get_last_hit(&alias).await?;
+
+    assert_ne!(first_acces, last_acces);
+
+    Ok(())
+}
+
+#[sqlx::test]
+async fn test_recent_hit_count(pool: PgPool) -> Result<()> {
+    let app = setup_app(pool, "test_recent_hit_count").await;
+
+    let url = "https://www.example.com";
+    let alias = app.shorten_url(url).await.unwrap();
+
+    for _ in 0..5 {
+        app.get_url(&alias).await?;
+    }
+
+    let recent_hc = app.get_recent_hits(&alias).await?;
+
+    assert_eq!(recent_hc, 5);
+
+    Ok(())
 }
