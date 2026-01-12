@@ -64,7 +64,16 @@ impl PartialEq for GetUrlError {
 
 impl std::fmt::Display for GetUrlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        match self {
+            GetUrlError::AliasNotFount => write!(f, "couldn't find alias in the db"),
+            GetUrlError::HitLogFail(_, error) => {
+                write!(
+                    f,
+                    "logging access of existing alias failed at the db: {error}",
+                )
+            }
+            GetUrlError::DBErr(error) => write!(f, "failed to access the links table: {error}"),
+        }
     }
 }
 
