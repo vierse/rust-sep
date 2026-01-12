@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE links\n            SET hitcount = hitcount + 1\n            WHERE alias = $1\n            RETURNING url, id\n            ",
+  "query": "\n            UPDATE links\n            SET hitcount = hitcount + 1, last_access = now()\n            WHERE alias = $1\n            RETURNING url, id\n            ",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "139c2d88707eba9ca9cc4ad0fc84c585a1e807b3bf2db88d0f60c878aeab1f6d"
+  "hash": "368bdcd6dfd345e0bc37e5522936d8d722e0ddc679f74d703de3a9efd594523b"
 }
