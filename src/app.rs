@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -5,12 +6,13 @@ use sqids::Sqids;
 use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
 
-use crate::{api, config::Settings};
+use crate::{api, config::Settings, maintenance::{UsageMetrics, DefaultUsageMetrics, Cache, NoOpCache, MaintenanceScheduler, tasks::CleanupUnusedLinksTask}};
 
 #[derive(Clone)]
 pub struct AppState {
     pool: Pool<Postgres>,
     sqids: Sqids,
+    usage_metrics: Arc<dyn UsageMetrics>,
 }
 
 impl AppState {
@@ -74,7 +76,13 @@ impl AppState {
         .context("DB select query failed")?;
 
         match rec {
-            Some(r) => Ok(r.url),
+            Some(r) => {
+                // Record access for usage metrics
+                if let Err(e) = self.usage_metrics.record_access(alias).await {
+                    tracing::warn!(error = %e, alias = alias, "Failed to record access metrics");
+                }
+                Ok(r.url)
+            }
             None => bail!("This alias does not exist"),
         }
     }
@@ -108,19 +116,59 @@ pub async fn build_app_state(pool: Pool<Postgres>) -> Result<AppState> {
         .alphabet(ALPHABET.chars().collect())
         .build()?;
 
-    Ok(AppState { pool, sqids })
+    // Initialize usage metrics
+    let usage_metrics: Arc<dyn UsageMetrics> = Arc::new(DefaultUsageMetrics::new(pool.clone()));
+
+    Ok(AppState { pool, sqids, usage_metrics })
 }
 
 pub async fn run(config: Settings) -> Result<()> {
     let pool = connect_to_db(config.database_url.as_str()).await?;
-    let state = build_app_state(pool).await?;
+    let state = build_app_state(pool.clone()).await?;
+    
+    // Set up maintenance scheduler
+    let usage_metrics: Arc<dyn UsageMetrics> = Arc::new(DefaultUsageMetrics::new(pool.clone()));
+    let cache: Arc<dyn Cache> = Arc::new(NoOpCache);
+    
+    let mut scheduler = MaintenanceScheduler::new(
+        pool.clone(),
+        usage_metrics.clone(),
+        cache,
+    );
+    
+    // Add maintenance tasks
+    scheduler.add_task(Arc::new(CleanupUnusedLinksTask::default()));
+    
+    // Start scheduler in background
+    let scheduler_handle = {
+        let scheduler = scheduler;
+        tokio::spawn(async move {
+            if let Err(e) = scheduler.start().await {
+                tracing::error!(error = %e, "Maintenance scheduler error");
+            }
+        })
+    };
+    
     let router = api::build_router(state);
-
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = TcpListener::bind(&addr).await?;
 
     tracing::info!("App running on {addr}");
-    axum::serve(listener, router).await?;
+    
+    // Run server
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, router).await
+    });
+    
+    // Wait for either server or scheduler to finish (they shouldn't)
+    tokio::select! {
+        result = server_handle => {
+            result??;
+        }
+        _ = scheduler_handle => {
+            tracing::warn!("Maintenance scheduler stopped unexpectedly");
+        }
+    }
 
     Ok(())
 }
