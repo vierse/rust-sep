@@ -236,6 +236,23 @@ impl AppState {
 
         Ok(rec.last_access)
     }
+    #[tracing::instrument(name = "app::recently_added_links", skip(self))]
+    pub async fn recently_added_links(&self, limit: i64) -> Result<Vec<String>> {
+        let recs = sqlx::query_as::<_, (String,)>(
+            r#"
+            SELECT url
+            FROM links
+            ORDER BY id DESC
+            LIMIT $1
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .context("DB select recent links query failed")?;
+
+        Ok(recs.into_iter().map(|(url,)| url).collect())
+    }
 }
 
 pub async fn connect_to_db(database_url: &str) -> Result<Pool<Postgres>> {
