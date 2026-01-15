@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use axum::{
@@ -359,7 +359,7 @@ async fn clear_old_hits(pool: &Pool<Postgres>) -> Result<()> {
 
 pub async fn run(config: Settings) -> Result<()> {
     let pool = connect_to_db(config.database_url.as_str()).await?;
-    let state = Arc::new(build_app_state(pool.clone()).await?);
+    let state = build_app_state(pool.clone()).await?;
     let router = api::build_router(state.clone());
 
     let addr = format!("0.0.0.0:{}", config.port);

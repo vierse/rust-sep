@@ -2,14 +2,13 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{api::handlers, app::AppState};
 
 const DIST_DIR: &str = "web/dist";
 
-pub fn build_router(state: Arc<AppState>) -> Router {
+pub fn build_router(state: AppState) -> Router {
     let serve = ServeDir::new(DIST_DIR).fallback(ServeFile::new(format!("{DIST_DIR}/index.html")));
 
     Router::new()

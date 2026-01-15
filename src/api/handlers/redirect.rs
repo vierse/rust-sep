@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -8,10 +6,7 @@ use axum::{
 
 use crate::app::AppState;
 
-pub async fn redirect(
-    State(app): State<Arc<AppState>>,
-    Path(alias): Path<String>,
-) -> impl IntoResponse {
+pub async fn redirect(State(app): State<AppState>, Path(alias): Path<String>) -> impl IntoResponse {
     match app.get_url(&alias).await {
         Ok(url) => Redirect::permanent(&url).into_response(),
         Err(e) => match e {
