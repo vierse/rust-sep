@@ -21,3 +21,12 @@ sqids = "0.4.2"
 [dev-dependencies]
 tower = { version = "0.5.1", features = ["full"] }
 serde_json = "1.0"
+criterion = { version = "0.8", features = ["async_tokio"] }
+http = "1"
+hyper = { version = "1", features = ["full"] }
+http-body-util = "0.1"
+hyper-util = { version = "0.1", features = ["full"] }
+
+[[bench]]
+name = "oneshot"
+harness = false
