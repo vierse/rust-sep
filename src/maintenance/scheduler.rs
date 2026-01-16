@@ -5,12 +5,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
 
+use crate::maintenance::cache::Cache;
 use crate::maintenance::tasks::MaintenanceTask;
 use crate::maintenance::usage_metrics::UsageMetrics;
-use crate::maintenance::cache::Cache;
 
 /// Scheduler for maintenance tasks
-/// 
+///
 /// Runs maintenance tasks periodically, respecting load distribution.
 /// Tasks are only executed during low-traffic periods to avoid impacting performance.
 pub struct MaintenanceScheduler {
@@ -49,7 +49,7 @@ impl MaintenanceScheduler {
     }
 
     /// Start the scheduler
-    /// 
+    ///
     /// This will run indefinitely, checking and executing tasks based on load.
     pub async fn start(&self) -> Result<()> {
         let mut interval_timer = interval(self.check_interval);
@@ -67,17 +67,14 @@ impl MaintenanceScheduler {
             for task in &self.tasks {
                 match task.should_run(self.usage_metrics.as_ref()).await {
                     Ok(true) => {
-                        tracing::debug!(
-                            task = task.name(),
-                            "Task conditions met, executing"
-                        );
+                        tracing::debug!(task = task.name(), "Task conditions met, executing");
 
-                        match task.execute(&self.pool, self.usage_metrics.as_ref(), self.cache.as_ref()).await {
+                        match task
+                            .execute(&self.pool, self.usage_metrics.as_ref(), self.cache.as_ref())
+                            .await
+                        {
                             Ok(()) => {
-                                tracing::info!(
-                                    task = task.name(),
-                                    "Task completed successfully"
-                                );
+                                tracing::info!(task = task.name(), "Task completed successfully");
                             }
                             Err(e) => {
                                 tracing::error!(
@@ -89,10 +86,7 @@ impl MaintenanceScheduler {
                         }
                     }
                     Ok(false) => {
-                        tracing::debug!(
-                            task = task.name(),
-                            "Task conditions not met, skipping"
-                        );
+                        tracing::debug!(task = task.name(), "Task conditions not met, skipping");
                     }
                     Err(e) => {
                         tracing::warn!(
@@ -106,4 +100,3 @@ impl MaintenanceScheduler {
         }
     }
 }
-

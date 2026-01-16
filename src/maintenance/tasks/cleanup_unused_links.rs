@@ -3,12 +3,12 @@ use sqlx::Pool;
 use sqlx::Postgres;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::maintenance::cache::Cache;
 use crate::maintenance::tasks::MaintenanceTask;
 use crate::maintenance::usage_metrics::UsageMetrics;
-use crate::maintenance::cache::Cache;
 
 /// Task to clean up unused links
-/// 
+///
 /// Removes links that haven't been accessed in a specified period.
 /// This task respects load distribution and only runs during low-traffic periods.
 pub struct CleanupUnusedLinksTask {
@@ -81,10 +81,7 @@ impl MaintenanceTask for CleanupUnusedLinksTask {
         // Note: This is a placeholder for Cache #14 integration
         if deleted_count > 0 {
             cache.invalidate_all().await?;
-            tracing::debug!(
-                task = self.name(),
-                "Invalidated cache after cleanup"
-            );
+            tracing::debug!(task = self.name(), "Invalidated cache after cleanup");
         }
 
         Ok(())
@@ -94,8 +91,7 @@ impl MaintenanceTask for CleanupUnusedLinksTask {
         // Only run during low-traffic periods
         let current_load = usage_metrics.get_current_load().await?;
         let is_low_traffic = usage_metrics.is_low_traffic_period().await?;
-        
+
         Ok(current_load < 0.5 && is_low_traffic)
     }
 }
-

@@ -1,5 +1,5 @@
-use async_trait::async_trait;
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use sqlx::Pool;
 use sqlx::Postgres;
 use std::sync::Arc;
@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 
 /// Trait for usage metrics tracking
-/// 
+///
 /// This is designed to integrate with Usage Metrics #15.
 /// Provides load distribution information for maintenance task scheduling.
 #[async_trait]
@@ -24,7 +24,7 @@ pub trait UsageMetrics: Send + Sync {
 }
 
 /// Default implementation of UsageMetrics
-/// 
+///
 /// Tracks request rate and calculates load based on recent activity.
 pub struct DefaultUsageMetrics {
     pool: Pool<Postgres>,
@@ -42,7 +42,7 @@ impl DefaultUsageMetrics {
             pool,
             recent_requests: Arc::new(RwLock::new(Vec::new())),
             window_size: Duration::from_secs(60), // 1 minute window
-            max_requests_per_window: 100, // 100 requests per minute = low load
+            max_requests_per_window: 100,         // 100 requests per minute = low load
         }
     }
 
@@ -122,4 +122,3 @@ impl UsageMetrics for DefaultUsageMetrics {
         Ok(())
     }
 }
-

@@ -1,12 +1,12 @@
 mod cleanup_unused_links;
 
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 use sqlx::Pool;
 use sqlx::Postgres;
 
-use crate::maintenance::usage_metrics::UsageMetrics;
 use crate::maintenance::cache::Cache;
+use crate::maintenance::usage_metrics::UsageMetrics;
 
 /// Trait for maintenance tasks that can be scheduled
 #[async_trait]
@@ -32,4 +32,3 @@ pub trait MaintenanceTask: Send + Sync {
 }
 
 pub use cleanup_unused_links::CleanupUnusedLinksTask;
-

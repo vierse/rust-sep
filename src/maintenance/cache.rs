@@ -1,8 +1,8 @@
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
 
 /// Trait for cache operations
-/// 
+///
 /// This is designed to integrate with Cache #14.
 /// Provides cache invalidation capabilities for maintenance tasks.
 #[async_trait]
@@ -15,7 +15,7 @@ pub trait Cache: Send + Sync {
 }
 
 /// Default no-op cache implementation
-/// 
+///
 /// Used when Cache #14 is not yet implemented.
 pub struct NoOpCache;
 
@@ -31,4 +31,3 @@ impl Cache for NoOpCache {
         Ok(())
     }
 }
-

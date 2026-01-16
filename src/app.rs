@@ -6,7 +6,14 @@ use sqids::Sqids;
 use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
 
-use crate::{api, config::Settings, maintenance::{UsageMetrics, DefaultUsageMetrics, Cache, NoOpCache, MaintenanceScheduler, tasks::CleanupUnusedLinksTask}};
+use crate::{
+    api,
+    config::Settings,
+    maintenance::{
+        Cache, DefaultUsageMetrics, MaintenanceScheduler, NoOpCache, UsageMetrics,
+        tasks::CleanupUnusedLinksTask,
+    },
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -119,26 +126,26 @@ pub async fn build_app_state(pool: Pool<Postgres>) -> Result<AppState> {
     // Initialize usage metrics
     let usage_metrics: Arc<dyn UsageMetrics> = Arc::new(DefaultUsageMetrics::new(pool.clone()));
 
-    Ok(AppState { pool, sqids, usage_metrics })
+    Ok(AppState {
+        pool,
+        sqids,
+        usage_metrics,
+    })
 }
 
 pub async fn run(config: Settings) -> Result<()> {
     let pool = connect_to_db(config.database_url.as_str()).await?;
     let state = build_app_state(pool.clone()).await?;
-    
+
     // Set up maintenance scheduler
     let usage_metrics: Arc<dyn UsageMetrics> = Arc::new(DefaultUsageMetrics::new(pool.clone()));
     let cache: Arc<dyn Cache> = Arc::new(NoOpCache);
-    
-    let mut scheduler = MaintenanceScheduler::new(
-        pool.clone(),
-        usage_metrics.clone(),
-        cache,
-    );
-    
+
+    let mut scheduler = MaintenanceScheduler::new(pool.clone(), usage_metrics.clone(), cache);
+
     // Add maintenance tasks
     scheduler.add_task(Arc::new(CleanupUnusedLinksTask::default()));
-    
+
     // Start scheduler in background
     let scheduler_handle = {
         let scheduler = scheduler;
@@ -148,18 +155,16 @@ pub async fn run(config: Settings) -> Result<()> {
             }
         })
     };
-    
+
     let router = api::build_router(state);
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = TcpListener::bind(&addr).await?;
 
     tracing::info!("App running on {addr}");
-    
+
     // Run server
-    let server_handle = tokio::spawn(async move {
-        axum::serve(listener, router).await
-    });
-    
+    let server_handle = tokio::spawn(async move { axum::serve(listener, router).await });
+
     // Wait for either server or scheduler to finish (they shouldn't)
     tokio::select! {
         result = server_handle => {
