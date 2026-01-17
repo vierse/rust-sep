@@ -11,10 +11,10 @@ pub enum UrlParseError {
     ContainsUserinfo,
     #[error("scheme `{0}` is not allowed")]
     WrongScheme(String),
-    #[error("domain `{0}` is blocked")]
-    BlockedDomain(String),
-    #[error("URL does not contain a domain")]
-    EmptyDomain,
+    #[error("host `{0}` is blocked")]
+    BlockedHost(String),
+    #[error("URL does not contain a host")]
+    EmptyHost,
     #[error("could not parse the URL")]
     Invalid(url::ParseError),
 }
@@ -32,18 +32,18 @@ impl Url {
             return Err(UrlParseError::ContainsUserinfo);
         }
 
-        let domain = url.domain().unwrap_or("");
-        if domain.is_empty() {
-            return Err(UrlParseError::EmptyDomain);
+        let url_domain = url.domain().unwrap_or("");
+        if url_domain.is_empty() {
+            return Err(UrlParseError::EmptyHost);
         }
-        if domain
+        if url_domain
             .trim_end_matches(".")
             .to_ascii_lowercase()
             .eq_ignore_ascii_case("localhost")
-            || domain.ends_with(".local")
-            || !domain.contains('.')
+            || url_domain.ends_with(".local")
+            || !url_domain.contains('.')
         {
-            return Err(UrlParseError::BlockedDomain(domain.to_string()));
+            return Err(UrlParseError::BlockedHost(url_domain.to_string()));
         }
 
         Ok(Self(url))
