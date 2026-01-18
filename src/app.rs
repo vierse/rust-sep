@@ -279,8 +279,6 @@ pub async fn build_app_state(pool: Pool<Postgres>) -> Result<AppState> {
 
     // Initialize usage metrics
     let usage_metrics: Arc<dyn UsageMetrics> = Arc::new(DefaultUsageMetrics::new(pool.clone()));
-  
-    let _ = create_daily_partition(&pool).await;
 
     Ok(AppState {
         pool,
