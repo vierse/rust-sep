@@ -1,17 +1,19 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use sqids::Sqids;
 use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions};
 use thiserror::Error;
+use time::OffsetDateTime;
 use tokio::net::TcpListener;
 
-use crate::{api, config::Settings, domain::Url};
+use crate::{api, config::Settings, domain::Url, metrics::Metrics, tasks};
 
 #[derive(Clone)]
 pub struct AppState {
     pool: Pool<Postgres>,
     sqids: Sqids,
+    metrics: Arc<Metrics>,
 }
 
 #[derive(Debug, Error)]
@@ -24,60 +26,8 @@ pub enum AppError {
     Other(#[from] anyhow::Error),
 }
 
-#[derive(Debug)]
-pub enum GetUrlError {
-    AliasNotFount,
-    LinkExpired,
-    /// failed to log the hit, but succeeded in getting the url
-    HitLogFail(String, sqlx::Error),
-    DBErr(sqlx::Error),
-}
-
-impl PartialEq for GetUrlError {
-    fn eq(&self, other: &Self) -> bool {
-        use GetUrlError::*;
-        match (self, other) {
-            (AliasNotFount, AliasNotFount) => true,
-            (LinkExpired, LinkExpired) => true,
-            (HitLogFail(url, _), HitLogFail(url1, _)) => url == url1,
-            (DBErr(_), DBErr(_)) => true,
-            _ => false,
-        }
-    }
-}
-
-impl std::fmt::Display for GetUrlError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            GetUrlError::AliasNotFount => write!(f, "couldn't find alias in the db"),
-            GetUrlError::LinkExpired => write!(f, "the link has expired"),
-            GetUrlError::HitLogFail(_, error) => {
-                write!(
-                    f,
-                    "logging access of existing alias failed at the db: {error}",
-                )
-            }
-            GetUrlError::DBErr(error) => write!(f, "failed to access the links table: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for GetUrlError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::AliasNotFount => None,
-            Self::LinkExpired => None,
-            Self::HitLogFail(_, e) => Some(e),
-            Self::DBErr(e) => Some(e),
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
-}
-
 impl AppState {
+    /// Shorten the provided URL and return the generated alias
     #[tracing::instrument(name = "app::shorten_url", skip(self))]
     pub async fn shorten_url(&self, url: &str) -> Result<String, AppError> {
         let mut tx: Transaction<Postgres> =
@@ -130,12 +80,12 @@ impl AppState {
         Ok(alias)
     }
 
-    /// queries a url, directly updating the hitcount
-    /// # Errors
-    /// fails if the requested alias does not exist in the database or if the link has expired
+    /// Query the database for the URL stored for the provided alias
+    ///
+    /// Returns Ok(None) if the alias does not exist
     #[tracing::instrument(name = "app::get_url", skip(self))]
     pub async fn get_url(&self, alias: &str) -> Result<Option<String>, AppError> {
-        let rec = sqlx::query!(
+        let rec_opt = sqlx::query!(
             r#"
             SELECT url, id, expires_at
             FROM links
@@ -147,15 +97,22 @@ impl AppState {
         .await
         .map_err(AppError::DatabaseError)?;
 
-        rec.map(|r| {
-            Url::parse(&r.url)
-                .with_context(|| format!("Failed to validate url from {alias}"))
-                .map(|u| u.into_string())
-                .map_err(AppError::Other)
-        })
-        .transpose()
+        rec_opt
+            .map(|rec| {
+                Url::parse(&rec.url)
+                    .with_context(|| format!("Failed to validate url from {alias}"))
+                    .map(|url| {
+                        self.metrics.record_hit(rec.id);
+                        url.into_string()
+                    })
+                    .map_err(AppError::Other)
+            })
+            .transpose()
     }
 
+    /// Save a user-defined alias for the provided URL
+    ///
+    /// Returns Ok(false) if the alias is already taken
     #[tracing::instrument(name = "app::save_named_url", skip(self))]
     pub async fn save_named_url(&self, alias: &str, url: &str) -> Result<bool, AppError> {
         let rec = sqlx::query!(
@@ -261,95 +218,25 @@ pub async fn build_app_state(pool: Pool<Postgres>) -> Result<AppState> {
         .alphabet(ALPHABET.chars().collect())
         .build()?;
 
-    let _ = create_daily_partition(&pool).await;
+    let metrics = Arc::new(Metrics::new());
 
-    Ok(AppState { pool, sqids })
-}
-
-/// tasks that will roughyl run every hour, tending to run slightly less often
-pub async fn maintenance(pool: Pool<Postgres>) {
-    let span = tracing::span!(tracing::Level::INFO, "hourly_maintenance");
-    let _guard = span.enter();
-    loop {
-        // sleep for an hour
-        tokio::time::sleep(Duration::from_secs(60 * 60)).await;
-
-        if let Err(e) = create_daily_partition(&pool).await {
-            tracing::error!("failed to create new partition of recent_hits: {e}");
-        }
-
-        if let Err(e) = clear_old_hits(&pool).await {
-            tracing::error!("failed to clear older hits: {e}");
-        } else {
-            tracing::info!("cleared hits old than TODO");
-        }
+    {
+        let pool = pool.clone();
+        tokio::spawn(tasks::daily_partition::run(pool));
     }
-}
 
-async fn create_daily_partition(pool: &Pool<Postgres>) -> Result<()> {
-    let table_name_format = time::macros::format_description!("recent_hits_[year]_[month]_[day]");
+    // TODO: notify?
+    {
+        let pool = pool.clone();
+        let metrics = metrics.clone();
+        tokio::spawn(tasks::flush_metrics::run(pool, metrics));
+    }
 
-    let today = time::OffsetDateTime::now_utc().date();
-    let tomorrow = today.next_day().expect("today is MAX day");
-
-    let partition_name = today
-        .format(&table_name_format)
-        .expect("formatting partition table name for recent hits failed");
-
-    sqlx::query(&format!(
-        r#"
-        CREATE TABLE IF NOT EXISTS {partition_name} PARTITION OF recent_hits
-        FOR VALUES FROM ('{}') TO ('{}')
-        "#,
-        today
-            .midnight()
-            .format(&time::format_description::well_known::Iso8601::DATE_TIME)?,
-        tomorrow
-            .midnight()
-            .format(&time::format_description::well_known::Iso8601::DATE_TIME)?
-    ))
-    .execute(pool)
-    .await?;
-
-    sqlx::query(&format!(
-        r#"
-        CREATE TABLE IF NOT EXISTS {partition_name} PARTITION OF recent_hits
-        FOR VALUES FROM ('{}') TO ('{}')
-        "#,
-        tomorrow
-            .midnight()
-            .format(&time::format_description::well_known::Iso8601::DATE_TIME)?,
-        tomorrow
-            .next_day()
-            .expect("tomorrow is MAX day")
-            .midnight()
-            .format(&time::format_description::well_known::Iso8601::DATE_TIME)?
-    ))
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
-async fn clear_old_hits(pool: &Pool<Postgres>) -> Result<()> {
-    let table_name_format = time::macros::format_description!("recent_hits_[year]_[month]_[day]");
-    let month_ago = time::OffsetDateTime::now_utc()
-        .date()
-        .saturating_sub(time::Duration::days(31));
-
-    let partition_name = month_ago
-        .format(&table_name_format)
-        .expect("formatting partition table name for recent hits failed");
-
-    sqlx::query(&format!(
-        r#"
-        DROP TABLE IF NOT EXISTS {partition_name}
-        "#,
-    ))
-    .execute(pool)
-    .await?;
-
-    Ok(())
+    Ok(AppState {
+        pool,
+        sqids,
+        metrics,
+    })
 }
 
 pub async fn run(config: Settings) -> Result<()> {
@@ -361,8 +248,6 @@ pub async fn run(config: Settings) -> Result<()> {
     let listener = TcpListener::bind(&addr).await?;
 
     tracing::info!("App running on {addr}");
-
-    tokio::task::spawn(maintenance(pool));
 
     axum::serve(listener, router).await?;
 

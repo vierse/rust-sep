@@ -19,6 +19,21 @@ services:
         chown -R ${UID}:${GID} /app/web/dist
     restart: no
 
+  app:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_PORT: ${APP_PORT}
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASS}@postgres:${DB_PORT}/${DB_NAME}
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    restart: unless-stopped
+    cpuset: "0-3"
+
   postgres:
     image: postgres:18
     environment:
@@ -35,20 +50,19 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
+    cpuset: "4-7"
 
-  app:
-    build:
-      context: .
-      dockerfile: docker/app.Dockerfile
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      APP_PORT: ${APP_PORT}
-      DATABASE_URL: postgres://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+  locust:
+    image: locustio/locust
+    volumes:
+      - ./locust:/mnt/locust:ro
+    working_dir: /mnt/locust
+    restart: no
     ports:
-      - "${APP_PORT}:${APP_PORT}"
-    restart: unless-stopped
+      - "8089:8089"
+    command: >
+      -f locustfile.py --host http://app:${APP_PORT} --processes 2
+    cpuset: "8-9"
 
 volumes:
   deno_cache:
