@@ -2,7 +2,8 @@
  * App state that is rendered by the UI
  */
 export type AppState = {
-  userInput: string;
+  userUrl: string;
+  userAlias: string;
   result: Result;
 }
 
@@ -28,7 +29,8 @@ type Result =
  * Events used by {@link eventReducer}
  */
 type Event =
-  | { kind: "setInput"; input: string }
+  | { kind: "setUrl"; input: string }
+  | { kind: "setAlias"; input: string }
   | { kind: "submit" }
   | { kind: "requestOk"; shortUrl: string }
   | { kind: "requestErr"; errMsg: string }
@@ -42,7 +44,7 @@ type Event =
  * Effects produced by {@link eventReducer}
  */
 type Effect =
-  | { kind: "shortenUrl"; url: string }
+  | { kind: "shortenUrl"; url: string, name?: string }
   | { kind: "clipboardCopy"; shortUrl: string }
 
 /**
@@ -75,14 +77,18 @@ export function eventReducer(m: Model, ev: Event): Model {
   const { state } = m;
 
   switch (ev.kind) {
-    case "setInput": {
-      return withState(m, { userInput: ev.input, result: state.result });
+    case "setUrl": {
+      return withState(m, { ...state, userUrl: ev.input });
+    }
+
+    case "setAlias": {
+      return withState(m, { ...state, userAlias: ev.input });
     }
 
     case "submit": {
       if (state.result.kind === "waiting") return m;
 
-      const url = state.userInput.trim();
+      const url = state.userUrl.trim();
       if (!url) {
         return withState(m, {
           ...state,
@@ -90,8 +96,8 @@ export function eventReducer(m: Model, ev: Event): Model {
         });
       }
 
-      const effect = withState(m, { ...state, result: { kind: "waiting" } });
-      return enqueue(effect, { kind: "shortenUrl", url });
+      const effect = withState(m, { ...state, userAlias: "", result: { kind: "waiting" } });
+      return enqueue(effect, { kind: "shortenUrl", url, name: state.userAlias.trim() || undefined });
     }
 
     case "requestOk": {
@@ -112,7 +118,7 @@ export function eventReducer(m: Model, ev: Event): Model {
     case "retry": {
       if (state.result.kind !== "err") return m;
 
-      const url = state.userInput.trim();
+      const url = state.userUrl.trim();
       if (!url) {
         return withState(m, {
           ...state,
@@ -121,7 +127,7 @@ export function eventReducer(m: Model, ev: Event): Model {
       }
 
       const effect = withState(m, { ...state, result: { kind: "waiting" } });
-      return enqueue(effect, { kind: "shortenUrl", url });
+      return enqueue(effect, { kind: "shortenUrl", url, name: state.userAlias.trim() || undefined });
     }
 
     case "copy": {
@@ -141,7 +147,7 @@ export function eventReducer(m: Model, ev: Event): Model {
     }
 
     case "clear": {
-      return withState(m, { ...state, userInput: "", result: { kind: "none" } });
+      return withState(m, { ...state, userUrl: "", result: { kind: "none" } });
     }
 
     case "effectsRun": {

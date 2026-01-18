@@ -1,7 +1,8 @@
-import { Flex, TextField, Button, Box } from "@radix-ui/themes";
-import { Link2Icon, PaperPlaneIcon, ClipboardIcon, EraserIcon, ReloadIcon } from "@radix-ui/react-icons"
+import { Flex, TextField, Button, Box, IconButton } from "@radix-ui/themes";
+import { Link2Icon, PaperPlaneIcon, ClipboardIcon, EraserIcon, ReloadIcon, DotsHorizontalIcon } from "@radix-ui/react-icons"
 import { useAppController, type ViewEvents } from './controller';
 import type { AppState } from './model';
+import { useState } from "react";
 
 type Button =
   | { type: "submit"; loading?: boolean }
@@ -44,7 +45,7 @@ function getButtonsByState(state: AppState): Button[] {
   }
 }
 
-function ActionButtons({ state, events }: { state: AppState, events: ViewEvents }) {
+function ActionButtons({ state, events, onCloseOptions, onClearOptions }: { state: AppState, events: ViewEvents, onCloseOptions: () => void, onClearOptions: () => void }) {
   return (
     <>
       {getButtonsByState(state).map((b) => {
@@ -53,14 +54,20 @@ function ActionButtons({ state, events }: { state: AppState, events: ViewEvents 
         switch (b.type) {
           case "submit":
             return (
-              <Button key={key} onClick={events.onSubmit} loading={b.loading} color="green">
+              <Button key={key} onClick={() => {
+                onCloseOptions();
+                events.onSubmit();
+              }} loading={b.loading} color="green">
                 <PaperPlaneIcon />
               </Button>
             );
 
           case "retry":
             return (
-              <Button key={key} onClick={events.onRetry} loading={b.loading}>
+              <Button key={key} onClick={() => {
+                onCloseOptions();
+                events.onRetry();
+              }} loading={b.loading}>
                 <ReloadIcon />
               </Button>
             );
@@ -74,7 +81,10 @@ function ActionButtons({ state, events }: { state: AppState, events: ViewEvents 
 
           case "clear":
             return (
-              <Button key={key} onClick={events.onClear} loading={b.loading} color="red">
+              <Button key={key} onClick={() => {
+                onClearOptions();
+                events.onClear();
+              }} loading={b.loading} color="red">
                 <EraserIcon />
               </Button>
             );
@@ -84,14 +94,16 @@ function ActionButtons({ state, events }: { state: AppState, events: ViewEvents 
   );
 }
 
-function InputField({ state, events }: { state: AppState; events: ViewEvents }) {
+function InputField({ state, events, showOptions, onToggleOptions }: { state: AppState; events: ViewEvents, showOptions: boolean, onToggleOptions: () => void }) {
   // Input field should be read-only if it's showing a result, during copying or waiting for request
   const isReadOnly = state.result.kind === "ok" || state.result.kind === "copying" || state.result.kind === "waiting";
   // Controls what value gets displayed to the user, the Request result or their input
   const value =
     state.result.kind === "ok" || state.result.kind === "copying"
       ? state.result.shortUrl
-      : state.userInput;
+      : state.userUrl;
+
+  const canToggleOptions = state.result.kind === "none" || state.result.kind === "err";
 
   return (
     <Box data-status={state.result.kind} className="inputField">
@@ -100,11 +112,29 @@ function InputField({ state, events }: { state: AppState; events: ViewEvents }) 
         readOnly={isReadOnly}
         data-state={state.result.kind}
         style={{ width: "40rem", }}
-        onChange={(e) => events.onInput(e.target.value)
+        onChange={(e) => events.onUrlInput(e.target.value)
         }
       >
         <TextField.Slot><Link2Icon /></TextField.Slot>
+        <TextField.Slot>
+          <IconButton disabled={!canToggleOptions} variant="ghost" onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleOptions();
+          }}>
+            <DotsHorizontalIcon />
+          </IconButton>
+        </TextField.Slot>
       </TextField.Root >
+      {showOptions && (
+        <Box>
+          <TextField.Root
+            placeholder="URL Name"
+            value={state.userAlias}
+            onChange={(e) => events.onAliasInput(e.target.value)}
+          />
+        </Box>
+      )}
     </Box>
   );
 }
@@ -112,11 +142,27 @@ function InputField({ state, events }: { state: AppState; events: ViewEvents }) 
 export default function App() {
   const { state, events } = useAppController();
 
+  const [showOptions, setShowOptions] = useState(false);
+
+  const onToggleOptions = () => {
+    setShowOptions(v => !v);
+    events.onAliasInput("");
+  }
+
+  const onCloseOptions = () => {
+    setShowOptions(false);
+  }
+
+  const onClearOptions = () => {
+    setShowOptions(false);
+    events.onAliasInput("");
+  }
+
   return (
     <Flex align="center" justify="center" height="90vh" direction="column" gap="4">
       <Flex gap="2" align="center">
-        <InputField state={state} events={events} />
-        <ActionButtons state={state} events={events} />
+        <InputField state={state} events={events} showOptions={showOptions} onToggleOptions={onToggleOptions} />
+        <ActionButtons state={state} events={events} onCloseOptions={onCloseOptions} onClearOptions={onClearOptions} />
       </Flex>
     </Flex >
   );

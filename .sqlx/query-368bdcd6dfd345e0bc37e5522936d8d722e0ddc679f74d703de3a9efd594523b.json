@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE links\n            SET hitcount = hitcount + 1, last_access = now()\n            WHERE alias = $1\n            RETURNING url, id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "368bdcd6dfd345e0bc37e5522936d8d722e0ddc679f74d703de3a9efd594523b"
+}

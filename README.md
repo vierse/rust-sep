@@ -39,6 +39,11 @@ docker compose down -v
 Omit `-v` if you want to keep the data.
 
 ## SQL
+First make sure you have `cargo sqlx` installed by running:
+```
+cargo install sqlx-cli
+```
+
 If you add SQL queries, you'll need to generate sqlx cache for compile-time checking without a database running:
 ```
 cargo sqlx prepare
