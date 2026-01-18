@@ -1,6 +1,6 @@
 use anyhow::Result;
 use sqlx::PgPool;
-use url_shorten::app::{self, AppError};
+use url_shorten::app;
 
 async fn setup_app(pool: PgPool, test_name: &str) -> app::AppState {
     app::build_app_state(pool)
@@ -24,22 +24,20 @@ async fn test_shorten_url_success(pool: PgPool) {
     let alias = result.unwrap();
     assert!(alias.len() >= 6);
 
-    let retrieved = app.get_url(&alias).await;
-    assert!(retrieved.is_ok());
-    assert_eq!(retrieved.unwrap(), url);
+    let retrieved = app
+        .get_url(&alias)
+        .await
+        .expect("Could not get URL")
+        .unwrap();
+    assert_eq!(retrieved, url);
 }
 
 #[sqlx::test]
 async fn test_get_url_not_found(pool: PgPool) {
     let app = setup_app(pool, "test_get_url_not_found").await;
 
-    let result = app.get_url("nonexistent").await;
-    match result {
-        Err(AppError::NotExists(name)) => {
-            assert_eq!(name, "nonexistent");
-        }
-        other => panic!("unexpected error: {:?}", other),
-    }
+    let url_opt = app.get_url("nonexistent").await.expect("app error");
+    assert!(url_opt.is_none(), "Was not supposed to get a url");
 }
 
 #[sqlx::test]
@@ -70,7 +68,8 @@ async fn test_shorten_url_stress_test(pool: PgPool) {
         let retrieved = app
             .get_url(alias)
             .await
-            .expect("Should be able to retrieve URL");
+            .expect("Should be able to retrieve URL")
+            .unwrap();
         assert_eq!(
             retrieved, *expected_url,
             "Alias should resolve to correct URL"
@@ -111,7 +110,8 @@ async fn test_shorten_url_handles_concurrent_insert(pool: PgPool) {
         let retrieved = app
             .get_url(alias)
             .await
-            .expect("Should be able to retrieve URL");
+            .expect("Should be able to retrieve URL")
+            .unwrap();
         assert_eq!(retrieved, url, "All aliases should resolve to the same URL");
     }
 }
@@ -150,7 +150,8 @@ async fn test_shorten_url_different_urls_produce_unique_aliases(pool: PgPool) {
         let retrieved = app
             .get_url(alias)
             .await
-            .expect("Should be able to retrieve URL");
+            .expect("Should be able to retrieve URL")
+            .unwrap();
         assert_eq!(retrieved, *url, "Alias should resolve to correct URL");
     }
 }
@@ -168,8 +169,8 @@ async fn test_shorten_url_allows_duplicate_urls(pool: PgPool) {
         "Duplicate URLs should produce different aliases"
     );
 
-    assert_eq!(app.get_url(&alias1).await.unwrap(), url);
-    assert_eq!(app.get_url(&alias2).await.unwrap(), url);
+    assert_eq!(app.get_url(&alias1).await.unwrap().unwrap(), url);
+    assert_eq!(app.get_url(&alias2).await.unwrap().unwrap(), url);
 }
 
 #[sqlx::test]

@@ -1,9 +1,9 @@
 use thiserror::Error;
 
-use url::Url as InnerUrl;
+use url::Url as UrlParser;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Url(InnerUrl);
+pub struct Url(String);
 
 #[derive(Error, Debug)]
 pub enum UrlParseError {
@@ -21,7 +21,7 @@ pub enum UrlParseError {
 
 impl Url {
     pub fn parse(input: &str) -> Result<Self, UrlParseError> {
-        let url = InnerUrl::parse(input).map_err(UrlParseError::Invalid)?;
+        let url = UrlParser::parse(input).map_err(UrlParseError::Invalid)?;
 
         let scheme = url.scheme();
         if scheme != "http" && scheme != "https" {
@@ -46,7 +46,15 @@ impl Url {
             return Err(UrlParseError::BlockedHost(url_domain.to_string()));
         }
 
-        Ok(Self(url))
+        Ok(Self(input.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
     }
 }
 
@@ -107,5 +115,12 @@ mod test {
                 result
             );
         }
+    }
+
+    #[test]
+    fn saved_url_format() {
+        let test_url = "https://example.com";
+        let url = Url::parse(test_url).expect("Could not parse the URL");
+        assert_eq!(test_url, url.as_str(), "Saved URL does not match the input");
     }
 }
