@@ -71,7 +71,7 @@ impl DefaultUsageMetrics {
         let hour_of_day = (hours_since_epoch % 24) as u8;
 
         // 2 AM - 6 AM UTC is low-traffic period
-        hour_of_day >= 2 && hour_of_day < 6
+        (2..6).contains(&hour_of_day)
     }
 }
 

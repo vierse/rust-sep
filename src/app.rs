@@ -168,6 +168,10 @@ impl AppState {
             return Err(GetUrlError::AliasNotFount);
         };
 
+        if let Err(error) = self.usage_metrics.record_access(alias).await {
+            tracing::warn!(error = %error, "failed to record usage metrics");
+        }
+
         if let Err(db_err) = sqlx::query!(
             r#"
             INSERT INTO recent_hits (link_id)

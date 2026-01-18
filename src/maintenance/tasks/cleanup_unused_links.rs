@@ -20,9 +20,11 @@ impl CleanupUnusedLinksTask {
     pub fn new(days_unused: u64) -> Self {
         Self { days_unused }
     }
+}
 
+impl Default for CleanupUnusedLinksTask {
     /// Default: links unused for 90 days
-    pub fn default() -> Self {
+    fn default() -> Self {
         Self::new(90)
     }
 }
