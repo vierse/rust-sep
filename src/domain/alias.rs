@@ -29,6 +29,10 @@ impl Alias {
         }
         Ok(Self(input.to_string()))
     }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 #[cfg(test)]

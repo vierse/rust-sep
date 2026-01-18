@@ -1,15 +1,12 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use axum::{
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
 use sqids::Sqids;
-use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions, types::time::OffsetDateTime};
+use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions};
+use thiserror::Error;
 use tokio::net::TcpListener;
 
-use crate::{api, config::Settings};
+use crate::{api, config::Settings, domain::Url};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -17,35 +14,14 @@ pub struct AppState {
     sqids: Sqids,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum AppError {
-    AlreadyExists(String),
+    #[error("alias does not exist")]
     NotExists(String),
-    DatabaseError(sqlx::Error),
-    Other(anyhow::Error),
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        match self {
-            AppError::AlreadyExists(alias) => {
-                tracing::warn!(cause = %alias, "alias already exists");
-                (StatusCode::CONFLICT).into_response()
-            }
-            AppError::NotExists(alias) => {
-                tracing::warn!(cause = %alias, "alias does not exist");
-                (StatusCode::NOT_FOUND).into_response()
-            }
-            AppError::DatabaseError(e) => {
-                tracing::error!(error = %e, "database error");
-                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-            }
-            AppError::Other(e) => {
-                tracing::error!(error = %e, "unknown error");
-                (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-            }
-        }
-    }
+    #[error("database error {0}")]
+    DatabaseError(#[from] sqlx::Error),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 #[derive(Debug)]
@@ -158,7 +134,7 @@ impl AppState {
     /// # Errors
     /// fails if the requested alias does not exist in the database or if the link has expired
     #[tracing::instrument(name = "app::get_url", skip(self))]
-    pub async fn get_url(&self, alias: &str) -> Result<String, AppError> {
+    pub async fn get_url(&self, alias: &str) -> Result<Option<String>, AppError> {
         let rec = sqlx::query!(
             r#"
             SELECT url, id, expires_at
@@ -171,21 +147,17 @@ impl AppState {
         .await
         .map_err(AppError::DatabaseError)?;
 
-        match rec {
-            Some(r) => Ok(r.url),
-            None => Err(AppError::NotExists(alias.to_string())),
-        }
-
-        Ok(link.url)
+        rec.map(|r| {
+            Url::parse(&r.url)
+                .with_context(|| format!("Failed to validate url from {alias}"))
+                .map(|u| u.into_string())
+                .map_err(AppError::Other)
+        })
+        .transpose()
     }
 
     #[tracing::instrument(name = "app::save_named_url", skip(self))]
-    pub async fn save_named_url(
-        &self,
-        alias: &str,
-        url: &str,
-        expires_at: Option<OffsetDateTime>,
-    ) -> Result<(), AppError> {
+    pub async fn save_named_url(&self, alias: &str, url: &str) -> Result<bool, AppError> {
         let rec = sqlx::query!(
             r#"
             INSERT INTO links (alias, url, expires_at)
@@ -195,16 +167,12 @@ impl AppState {
             "#,
             alias,
             url,
-            expires_at
         )
         .fetch_optional(&self.pool)
         .await
         .map_err(AppError::DatabaseError)?;
 
-        match rec {
-            Some(_) => Ok(()),
-            None => Err(AppError::AlreadyExists(alias.to_string())),
-        }
+        Ok(rec.is_some())
     }
     #[tracing::instrument(name = "app::recently_added_links", skip(self))]
     pub async fn recently_added_links(&self, limit: i64) -> Result<Vec<String>> {

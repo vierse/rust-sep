@@ -1,13 +1,31 @@
 use axum::{
     extract::{Path, State},
-    response::{IntoResponse, Redirect},
+    response::Redirect,
 };
 
-use crate::app::AppState;
+// TODO: unite all the constants into the app settings
+const MAX_ALIAS_LENGTH: usize = 20;
 
-pub async fn redirect(State(app): State<AppState>, Path(alias): Path<String>) -> impl IntoResponse {
-    match app.get_url(&alias).await {
-        Ok(url) => Redirect::permanent(&url).into_response(),
-        Err(e) => e.into_response(),
+use crate::{api::error::ApiError, app::AppState};
+
+pub async fn redirect(
+    State(app): State<AppState>,
+    Path(alias): Path<String>,
+) -> Result<Redirect, ApiError> {
+    if alias.len() > MAX_ALIAS_LENGTH {
+        tracing::error!("maximum alias length exceeded");
+        return Err(ApiError::internal());
     }
+
+    let url_opt = app.get_url(&alias).await.map_err(|e| {
+        tracing::error!(error = %e, "app error");
+        ApiError::internal()
+    })?;
+
+    let url = url_opt.ok_or_else(|| {
+        tracing::debug!("alias not found: {alias}");
+        ApiError::not_found()
+    })?;
+
+    Ok(Redirect::permanent(&url))
 }
