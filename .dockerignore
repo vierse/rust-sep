@@ -5,11 +5,13 @@
 
 # Rust
 target/
-.sqlx
 
 # JS
 node_modules/
 dist/
+
+# Python
+__pycache__/
 
 # env
 .env

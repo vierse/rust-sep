@@ -4,6 +4,10 @@
 # Rust
 target/
 
+# Locust
+__pycache__/
+locust/data*.txt
+
 # JS
 node_modules/
 dist/

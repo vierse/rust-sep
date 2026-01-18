@@ -14,10 +14,13 @@ tower-http = { version = "0.6.8", features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-sqlx = { version = "0.8", features = [ "runtime-tokio", "postgres", "macros", "time" ] }
+sqlx = { version = "0.8", features = [ "runtime-tokio", "postgres", "macros", "time", "chrono" ] }
 url = "2.5.7"
 sqids = "0.4.2"
 time = "0.3.44"
+dashmap = "6.1.0"
+arc-swap = "1.8.0"
+chrono = "0.4.43"
 
 [dev-dependencies]
 tower = { version = "0.5.1", features = ["full"] }
