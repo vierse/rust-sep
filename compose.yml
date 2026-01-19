@@ -50,14 +50,27 @@ services:
       retries: 20
     restart: unless-stopped
 
-  app-cpuset:
-    extends:
-      service: app
+  app-locust:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    depends_on:
+      postgres-locust:
+        condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${DB_USER}:${DB_PASS}@postgres-cpuset:${DB_PORT}/${DB_NAME}
+      APP_PORT: ${APP_PORT}
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASS}@postgres-locust:${DB_PORT}/${DB_NAME}
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    restart: unless-stopped
     cpuset: "0-3"
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 20000
+        hard: 40000
 
-  postgres-cpuset:
+  postgres-locust:
     extends:
       service: postgres
     cpuset: "4-7"
@@ -71,8 +84,8 @@ services:
     ports:
       - "8089:8089"
     command: >
-      -f locustfile.py --host http://app-cpuset:${APP_PORT} --processes 2
-    cpuset: "8-9"
+      -f locustfile.py --host http://app-locust:${APP_PORT} --processes 4
+    cpuset: "8-11"
 
 volumes:
   deno_cache:
