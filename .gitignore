@@ -6,7 +6,7 @@ target/
 
 # Locust
 __pycache__/
-locust/data*.txt
+tests/locust/data*.txt
 
 # JS
 node_modules/
