@@ -79,14 +79,6 @@ async fn flush_to_db(
         return Ok(());
     }
 
-    assert!(
-        link_id_col.len() == hits_col.len() && hits_col.len() == last_access_col.len(),
-        "instead {} {} {}",
-        link_id_col.len(),
-        hits_col.len(),
-        last_access_col.len()
-    );
-
     sqlx::query!(
         r#"
         INSERT INTO daily_metrics (day, link_id, hits, last_access)
