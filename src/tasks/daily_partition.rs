@@ -1,8 +1,14 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use chrono::{NaiveDate, TimeDelta};
 use sqlx::PgPool;
+use time::{
+    Date, Duration as TimeDelta, format_description::StaticFormatDescription,
+    macros::format_description,
+};
+
+static PART_NAME_DATE_FD: StaticFormatDescription = format_description!("[year][month][day]");
+static ISO_DATE_FD: StaticFormatDescription = format_description!("[year]-[month]-[day]");
 
 pub async fn run(pool: PgPool) {
     let mut interval = tokio::time::interval(Duration::from_hours(24));
@@ -11,23 +17,26 @@ pub async fn run(pool: PgPool) {
         interval.tick().await;
 
         if let Err(e) = create_daily_partition(&pool).await {
-            eprintln!("partition creation failed: {e:?}");
+            tracing::error!(error = %e, "Failed to create daily partitions");
         }
     }
 }
 
 async fn create_daily_partition(pool: &PgPool) -> Result<()> {
-    // TODO: time or chrono?
-    let today: NaiveDate = sqlx::query_scalar("SELECT CURRENT_DATE")
+    let today: Date = sqlx::query_scalar("SELECT CURRENT_DATE")
         .fetch_one(pool)
         .await?;
 
+    // Create partitions for 4 days
     for offset in 0..=3 {
-        let from = today + TimeDelta::days(offset);
-        let to = from + TimeDelta::days(1);
+        let start = today + TimeDelta::days(offset);
+        let end = start + TimeDelta::days(1);
+
+        let iso_start = start.format(&ISO_DATE_FD)?;
+        let iso_end = end.format(&ISO_DATE_FD)?;
 
         // daily_hits_YYYYMMDD
-        let part_name = format!("daily_hits_{}", from.format("%Y%m%d"));
+        let part_name = format!("daily_hits_{}", start.format(&PART_NAME_DATE_FD)?);
         let sql = format!(
             r#"
             CREATE TABLE IF NOT EXISTS {part}
@@ -35,8 +44,8 @@ async fn create_daily_partition(pool: &PgPool) -> Result<()> {
             FOR VALUES FROM ('{from}') TO ('{to}');
             "#,
             part = part_name,
-            from = from.format("%Y-%m-%d"),
-            to = to.format("%Y-%m-%d"),
+            from = iso_start,
+            to = iso_end,
         );
 
         sqlx::query(&sql).execute(pool).await?;
@@ -45,4 +54,16 @@ async fn create_daily_partition(pool: &PgPool) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn date_formatting() {
+        let date = time::macros::date!(2026 - 01 - 19);
+        assert_eq!(date.format(&PART_NAME_DATE_FD).unwrap(), "20260119");
+        assert_eq!(date.format(&ISO_DATE_FD).unwrap(), "2026-01-19");
+    }
 }
