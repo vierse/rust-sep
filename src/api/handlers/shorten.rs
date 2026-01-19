@@ -80,17 +80,6 @@ fn validate_alias(alias: &str) -> Result<(), AliasError> {
     Ok(())
 }
 
-pub async fn recently_added_links(State(app): State<AppState>) -> impl IntoResponse {
-    match app.recently_added_links(10).await {
-        Ok(links) => (StatusCode::OK, Json(links)).into_response(),
-
-        Err(e) => {
-            tracing::error!(error = %e, "recently added links request error");
-            (StatusCode::INTERNAL_SERVER_ERROR).into_response()
-        }
-    }
-}
-
 /// encountered an Error while validating a url
 /// `ParseErr` happens when the url is invalid
 /// the others when we don't accept it for other reasons
