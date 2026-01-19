@@ -6,7 +6,7 @@ use axum::{
 // TODO: unite all the constants into the app settings
 const MAX_ALIAS_LENGTH: usize = 20;
 
-use crate::{api::error::ApiError, app::AppState};
+use crate::{api::error::ApiError, app::AppState, services};
 
 pub async fn redirect(
     State(app): State<AppState>,
@@ -20,11 +20,11 @@ pub async fn redirect(
     let key = alias.clone();
     let pool = app.pool.clone();
 
-    // Try get the url from cache else query DB
+    // Try to get the URL from cache else query DB
     let link_opt = app
         .cache
         .try_get_with(key.clone(), async move {
-            AppState::query_url(&key, &pool).await
+            services::query_link_by_alias(&key, &pool).await
         })
         .await
         .map_err(|e| {

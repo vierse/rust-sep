@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE links_main\n            SET alias = $1\n            WHERE id = $2\n            RETURNING alias\n            ",
+  "query": "\n        UPDATE links_main\n        SET alias = $1\n        WHERE id = $2\n        RETURNING alias\n        ",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       true
     ]
   },
-  "hash": "8415819892ff7d8593cd5d765d5b6c577ec3deda8775b7067b80e8d5770092e4"
+  "hash": "668e6a23e364b84a928dbd78d31df1aa59ae104df14aec8d3563dfbc282ee182"
 }

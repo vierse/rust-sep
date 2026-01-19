@@ -10,6 +10,7 @@ use crate::{
     api::error::ApiError,
     app::AppState,
     domain::{Alias, Url},
+    services,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -52,15 +53,14 @@ pub async fn shorten(
     };
 
     match name {
-        // if request contains an alias, validate and save it
+        // If request contains an alias, validate and save it
         Some(alias_str) => {
             let alias = Alias::parse(&alias_str).map_err(|e| {
                 tracing::debug!(error = %e, "alias parse error");
                 ApiError::from(e)
             })?;
 
-            let result = app
-                .save_named_url(alias.as_str(), url.as_str())
+            let result = services::create_link_with_alias(alias.as_str(), url.as_str(), &app.pool)
                 .await
                 .map_err(|e| {
                     tracing::error!(error = %e, "app error");
@@ -78,12 +78,14 @@ pub async fn shorten(
             Ok(ShortenResponse { alias: alias_str })
         }
 
-        // if request does not contain an alias, generate a new one
+        // If request does not contain an alias, generate a new one
         None => {
-            let alias = app.shorten_url(url.as_str()).await.map_err(|e| {
-                tracing::error!(error = %e, "app error");
-                ApiError::internal()
-            })?;
+            let alias = services::create_link(url.as_str(), &app.sqids, &app.pool)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, "app error");
+                    ApiError::internal()
+                })?;
 
             Ok(ShortenResponse { alias })
         }
