@@ -17,7 +17,7 @@ pub struct CachedLink {
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
-    pub sqids: Sqids,
+    pub sqids: Arc<Sqids>,
     pub metrics: Arc<Metrics>,
     pub cache: Cache<String, Option<CachedLink>>,
 }
@@ -45,10 +45,12 @@ pub async fn build_app_state(pool: PgPool) -> Result<AppState> {
     const ALPHABET: &str = "79Hr0JZijqWTnxhgoDEKMRpX4FNIfywG3e6LcldO5bCUYSBPa81s2QAumtzVvk";
 
     // Initialize Sqids generator
-    let sqids = Sqids::builder()
-        .min_length(MIN_ALIAS_LENGTH)
-        .alphabet(ALPHABET.chars().collect())
-        .build()?;
+    let sqids = Arc::new(
+        Sqids::builder()
+            .min_length(MIN_ALIAS_LENGTH)
+            .alphabet(ALPHABET.chars().collect())
+            .build()?,
+    );
 
     let metrics = Arc::new(Metrics::new());
 
