@@ -1,10 +1,8 @@
-use std::{
-    sync::{Arc, atomic::Ordering},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use sqlx::{PgPool, Postgres, QueryBuilder};
+use time::OffsetDateTime;
 
 use crate::metrics::{Metrics, MetricsMap};
 
@@ -30,18 +28,21 @@ async fn flush_metrics(pool: &PgPool, map: &MetricsMap) -> Result<()> {
         return Ok(());
     }
 
-    let mut rows: Vec<(i64, i64)> = Vec::with_capacity(map.len());
+    let mut rows: Vec<(i64, i64, OffsetDateTime)> = Vec::with_capacity(map.len());
 
     for entry in map.iter() {
         let key = entry.key();
         let val = entry.value();
 
-        let hits = val.load(Ordering::Relaxed);
+        let hits = val.hits();
         if hits == 0 {
             continue;
         }
 
-        rows.push((*key, hits));
+        let last_access = OffsetDateTime::from_unix_timestamp(val.last_access_s())
+            .context("Failed to convert last access seconds (i64) back into unix timestamp")?;
+
+        rows.push((*key, hits, last_access));
     }
 
     if rows.is_empty() {
@@ -57,25 +58,30 @@ async fn flush_metrics(pool: &PgPool, map: &MetricsMap) -> Result<()> {
     Ok(())
 }
 
-pub async fn db_query(pool: &PgPool, chunk: &[(i64, i64)]) -> Result<()> {
+pub async fn db_query(pool: &PgPool, chunk: &[(i64, i64, OffsetDateTime)]) -> Result<()> {
     if chunk.is_empty() {
         return Ok(());
     }
 
     let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
         r#"
-        INSERT INTO daily_hits (day, link_id, hits)
+        INSERT INTO daily_hits (day, link_id, hits, last_access)
         "#,
     );
 
-    qb.push_values(chunk, |mut b, (link_id, hits)| {
-        b.push("CURRENT_DATE").push_bind(link_id).push_bind(hits);
+    qb.push_values(chunk, |mut b, (link_id, hits, last_access)| {
+        b.push("CURRENT_DATE")
+            .push_bind(link_id)
+            .push_bind(hits)
+            .push_bind(last_access);
     });
 
     qb.push(
         r#"
         ON CONFLICT (day, link_id)
-        DO UPDATE SET hits = daily_hits.hits + EXCLUDED.hits
+        DO UPDATE SET
+            hits = daily_hits.hits + EXCLUDED.hits,
+            last_access = GREATEST(daily_hits.last_access, EXCLUDED.last_access);
         "#,
     );
 
