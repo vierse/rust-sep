@@ -60,7 +60,7 @@ pub async fn shorten(
                 ApiError::from(e)
             })?;
 
-            let result = services::create_link_with_alias(alias.as_str(), url.as_str(), &app.pool)
+            let result = services::create_link_with_alias(url.as_str(), alias.as_str(), &app.pool)
                 .await
                 .map_err(|e| {
                     tracing::error!(error = %e, "app error");
