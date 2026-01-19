@@ -32,7 +32,6 @@ services:
     ports:
       - "${APP_PORT}:${APP_PORT}"
     restart: unless-stopped
-    cpuset: "0-3"
 
   postgres:
     image: postgres:18
@@ -50,18 +49,29 @@ services:
       timeout: 5s
       retries: 20
     restart: unless-stopped
+
+  app-cpuset:
+    extends:
+      service: app
+    environment:
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASS}@postgres-cpuset:${DB_PORT}/${DB_NAME}
+    cpuset: "0-3"
+
+  postgres-cpuset:
+    extends:
+      service: postgres
     cpuset: "4-7"
 
   locust:
     image: locustio/locust
     volumes:
-      - ./locust:/mnt/locust:ro
+      - ./tests/locust:/mnt/locust:ro
     working_dir: /mnt/locust
     restart: no
     ports:
       - "8089:8089"
     command: >
-      -f locustfile.py --host http://app:${APP_PORT} --processes 2
+      -f locustfile.py --host http://app-cpuset:${APP_PORT} --processes 2
     cpuset: "8-9"
 
 volumes:
