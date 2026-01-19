@@ -17,15 +17,28 @@ pub async fn redirect(
         return Err(ApiError::internal());
     }
 
-    let url_opt = app.get_url(&alias).await.map_err(|e| {
-        tracing::error!(error = %e, "app error");
-        ApiError::internal()
-    })?;
+    let key = alias.clone();
+    let pool = app.pool.clone();
 
-    let url = url_opt.ok_or_else(|| {
+    // Try get the url from cache else query DB
+    let link_opt = app
+        .cache
+        .try_get_with(key.clone(), async move {
+            AppState::query_url(&key, &pool).await
+        })
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "failed to query or load url from cache");
+            ApiError::internal()
+        })?;
+
+    let link = link_opt.ok_or_else(|| {
         tracing::debug!("alias not found: {alias}");
         ApiError::not_found()
     })?;
 
-    Ok(Redirect::permanent(&url))
+    // Update metrics
+    app.metrics.record_hit(link.id);
+
+    Ok(Redirect::permanent(&link.url))
 }

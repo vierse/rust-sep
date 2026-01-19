@@ -89,17 +89,17 @@ async fn flush_to_db(
 
     sqlx::query!(
         r#"
-        INSERT INTO daily_hits (day, link_id, hits, last_access)
+        INSERT INTO daily_metrics (day, link_id, hits, last_access)
         SELECT
             CURRENT_DATE,
             t.link_id,
             t.hits,
             t.last_access
         FROM UNNEST($1::bigint[], $2::bigint[], $3::timestamptz[])
-             AS t(link_id, hits, last_access)
+            AS t(link_id, hits, last_access)
         ON CONFLICT (day, link_id) DO UPDATE
-          SET hits        = daily_hits.hits + EXCLUDED.hits,
-              last_access = GREATEST(daily_hits.last_access, EXCLUDED.last_access)
+          SET hits = daily_metrics.hits + EXCLUDED.hits,
+              last_access = GREATEST(daily_metrics.last_access, EXCLUDED.last_access)
         "#,
         link_id_col,
         hits_col,
