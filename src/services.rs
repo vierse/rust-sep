@@ -14,7 +14,7 @@ pub enum ServiceError {
 }
 
 /// Create a new link for the provided URL
-#[tracing::instrument(name = "services::create_link")]
+#[tracing::instrument(name = "services::create_link", skip(generator, pool))]
 pub async fn create_link(
     url: &str,
     generator: &Sqids,
@@ -70,7 +70,7 @@ pub async fn create_link(
 /// Create a link with user-defined alias for the provided URL
 ///
 /// Returns Ok(false) if the alias is already taken
-#[tracing::instrument(name = "services::create_link_with_alias")]
+#[tracing::instrument(name = "services::create_link_with_alias", skip(pool))]
 pub async fn create_link_with_alias(
     url: &str,
     alias: &str,
@@ -96,7 +96,7 @@ pub async fn create_link_with_alias(
 /// Query link from database
 ///
 /// Returns Ok(None) if the alias does not exist
-#[tracing::instrument(name = "services::query_link_by_alias")]
+#[tracing::instrument(name = "services::query_link_by_alias", skip(pool))]
 pub async fn query_link_by_alias(
     alias: &str,
     pool: &PgPool,
