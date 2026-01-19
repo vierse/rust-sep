@@ -35,12 +35,12 @@ async fn create_daily_partition(pool: &PgPool) -> Result<()> {
         let iso_start = start.format(&ISO_DATE_FD)?;
         let iso_end = end.format(&ISO_DATE_FD)?;
 
-        // daily_hits_YYYYMMDD
-        let part_name = format!("daily_hits_{}", start.format(&PART_NAME_DATE_FD)?);
+        // daily_metrics_YYYYMMDD
+        let part_name = format!("daily_metrics_{}", start.format(&PART_NAME_DATE_FD)?);
         let sql = format!(
             r#"
             CREATE TABLE IF NOT EXISTS {part}
-            PARTITION OF daily_hits
+            PARTITION OF daily_metrics
             FOR VALUES FROM ('{from}') TO ('{to}');
             "#,
             part = part_name,

@@ -1,19 +1,26 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
+use moka::future::Cache;
 use sqids::Sqids;
 use sqlx::{Pool, Postgres, Transaction, postgres::PgPoolOptions};
 use thiserror::Error;
-use time::OffsetDateTime;
 use tokio::net::TcpListener;
 
 use crate::{api, config::Settings, domain::Url, metrics::Metrics, tasks};
 
+#[derive(Debug, Clone)]
+pub struct CachedLink {
+    pub id: i64,
+    pub url: String,
+}
+
 #[derive(Clone)]
 pub struct AppState {
-    pool: Pool<Postgres>,
+    pub pool: Pool<Postgres>,
     sqids: Sqids,
-    metrics: Arc<Metrics>,
+    pub metrics: Arc<Metrics>,
+    pub cache: Cache<String, Option<CachedLink>>,
 }
 
 #[derive(Debug, Error)]
@@ -36,8 +43,8 @@ impl AppState {
         // Insert the url into database to get a unique id
         let rec = sqlx::query!(
             r#"
-            INSERT INTO links (url, expires_at)
-            VALUES ($1, $2)
+            INSERT INTO links_main (url)
+            VALUES ($1)
             RETURNING id
             "#,
             url,
@@ -58,7 +65,7 @@ impl AppState {
         // Update the record with generated alias
         let updated = sqlx::query!(
             r#"
-            UPDATE links
+            UPDATE links_main
             SET alias = $1
             WHERE id = $2
             RETURNING alias
@@ -83,29 +90,20 @@ impl AppState {
     /// Query the database for the URL stored for the provided alias
     ///
     /// Returns Ok(None) if the alias does not exist
-    #[tracing::instrument(name = "app::get_url", skip(self))]
-    pub async fn get_url(&self, alias: &str) -> Result<Option<String>, AppError> {
-        let rec_opt = sqlx::query!(
-            r#"
-            SELECT url, id, expires_at
-            FROM links
-            WHERE alias = $1
-            "#,
-            alias
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(AppError::DatabaseError)?;
+    pub async fn query_url(key: &str, pool: &Pool<Postgres>) -> Result<Option<CachedLink>> {
+        let rec_opt = sqlx::query!(r#"SELECT id, url FROM links_main WHERE alias = $1"#, key)
+            .fetch_optional(pool)
+            .await
+            .map_err(AppError::DatabaseError)?;
 
         rec_opt
             .map(|rec| {
-                Url::parse(&rec.url)
-                    .with_context(|| format!("Failed to validate url from {alias}"))
-                    .map(|url| {
-                        self.metrics.record_hit(rec.id);
-                        url.into_string()
-                    })
-                    .map_err(AppError::Other)
+                let url = Url::parse(&rec.url)
+                    .with_context(|| format!("Failed to validate url from {key}"))
+                    .map_err(AppError::Other)?
+                    .into_string();
+
+                Ok(CachedLink { id: rec.id, url })
             })
             .transpose()
     }
@@ -117,8 +115,8 @@ impl AppState {
     pub async fn save_named_url(&self, alias: &str, url: &str) -> Result<bool, AppError> {
         let rec = sqlx::query!(
             r#"
-            INSERT INTO links (alias, url, expires_at)
-            VALUES ($1, $2, $3)
+            INSERT INTO links_main (alias, url)
+            VALUES ($1, $2)
             ON CONFLICT (alias) DO NOTHING
             RETURNING id
             "#,
@@ -130,63 +128,6 @@ impl AppState {
         .map_err(AppError::DatabaseError)?;
 
         Ok(rec.is_some())
-    }
-    #[tracing::instrument(name = "app::recently_added_links", skip(self))]
-    pub async fn recently_added_links(&self, limit: i64) -> Result<Vec<String>> {
-        let recs = sqlx::query!(
-            r#"
-            SELECT url
-            FROM links
-            ORDER BY id DESC
-            LIMIT $1
-            "#,
-            limit
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("DB select recent links query failed")?;
-
-        Ok(recs.into_iter().map(|rec| rec.url).collect())
-    }
-
-    #[tracing::instrument(name = "app::get_recent_hits", skip(self))]
-    pub async fn get_recent_hits(&self, alias: &str) -> Result<u64> {
-        let rec = sqlx::query!(
-            r#"
-            SELECT COUNT(*)
-            FROM recent_hits
-            WHERE link_id IN (
-                SELECT id
-                FROM links
-                WHERE alias = $1
-            )
-            "#,
-            alias
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        rec.count
-            .ok_or(anyhow!(
-                "fetching the number of recent hits for link {alias} returned None"
-            ))
-            .map(|c| c as u64)
-    }
-
-    #[tracing::instrument(name = "app::get_last_hit", skip(self))]
-    pub async fn get_last_hit(&self, alias: &str) -> Result<OffsetDateTime> {
-        let rec = sqlx::query!(
-            r#"
-            SELECT last_access
-            FROM links
-            WHERE alias = $1
-            "#,
-            alias
-        )
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(rec.last_access)
     }
 }
 
@@ -232,10 +173,13 @@ pub async fn build_app_state(pool: Pool<Postgres>) -> Result<AppState> {
         tokio::spawn(tasks::flush_metrics::run(pool, metrics));
     }
 
+    let cache: Cache<String, Option<CachedLink>> = Cache::new(1_000);
+
     Ok(AppState {
         pool,
         sqids,
         metrics,
+        cache,
     })
 }
 

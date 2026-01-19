@@ -21,6 +21,7 @@ time = { version = "0.3", features = ["macros", "formatting"] }
 dashmap = "6.1.0"
 arc-swap = "1.8.0"
 chrono = "0.4.43"
+moka = { version = "0.12.12", features = ["future"] }
 
 [dev-dependencies]
 tower = { version = "0.5.1", features = ["full"] }
