@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO daily_hits (day, link_id, hits, last_access)\n        SELECT\n            CURRENT_DATE,\n            t.link_id,\n            t.hits,\n            t.last_access\n        FROM UNNEST($1::bigint[], $2::bigint[], $3::timestamptz[])\n             AS t(link_id, hits, last_access)\n        ON CONFLICT (day, link_id) DO UPDATE\n          SET hits        = daily_hits.hits + EXCLUDED.hits,\n              last_access = GREATEST(daily_hits.last_access, EXCLUDED.last_access)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "Int8Array",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ce2d976bf46e910ad80372e47c56acceec0fff869f636f6f1e91f7d353a8fad"
+}
