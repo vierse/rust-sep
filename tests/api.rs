@@ -167,28 +167,28 @@ async fn recently_added_links(pool: PgPool) {
 
     let router = router(pool).await;
 
+    // Make a POST request to /api/shorten (first url)
     let request_body = Body::from(serde_json::to_vec(&json!({"url": TEST_URL})).unwrap());
-    // Make a POST request to /api/shorten
-
     let request = Request::post("/api/shorten")
         .header("content-type", "application/json")
         .body(request_body)
         .unwrap();
 
     let _response = router.clone().oneshot(request).await.unwrap();
-    //Make a second POST request to api/shorten
 
+    //Make a  POST request to api/shorten (second url)
     let request_body = Body::from(serde_json::to_vec(&json!({"url": TEST_URL2})).unwrap());
     let request = Request::post("/api/shorten")
         .header("content-type", "application/json")
         .body(request_body)
         .unwrap();
+
     let _response = router.clone().oneshot(request).await.unwrap();
 
     //Make a GET request to /api/recent
-
     let request_body = Body::empty();
     let request = Request::get("/api/recent").body(request_body).unwrap();
+
     let response = router.oneshot(request).await.unwrap();
 
     assert_eq!(

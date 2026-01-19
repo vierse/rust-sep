@@ -196,6 +196,23 @@ impl AppState {
             None => Err(AppError::AlreadyExists(alias.to_string())),
         }
     }
+    #[tracing::instrument(name = "app::recently_added_links", skip(self))]
+    pub async fn recently_added_links(&self, limit: i64) -> Result<Vec<String>> {
+        let recs = sqlx::query!(
+            r#"
+            SELECT url
+            FROM links
+            ORDER BY id DESC
+            LIMIT $1
+            "#,
+            limit
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("DB select recent links query failed")?;
+
+        Ok(recs.into_iter().map(|rec| rec.url).collect())
+    }
 
     #[tracing::instrument(name = "app::get_recent_hits", skip(self))]
     pub async fn get_recent_hits(&self, alias: &str) -> Result<u64> {
