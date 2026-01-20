@@ -288,6 +288,11 @@ pub async fn maintenance(pool: Pool<Postgres>) {
         } else {
             tracing::info!("cleared hits old than TODO");
         }
+
+        match cleanup_unused_links(&pool).await {
+            Ok(removed) => tracing::info!("cleaned up {removed} unused links"),
+            Err(e) => tracing::error!("failed to clean up unused links: {e}"),
+        }
     }
 }
 
@@ -355,6 +360,23 @@ async fn clear_old_hits(pool: &Pool<Postgres>) -> Result<()> {
     .await?;
 
     Ok(())
+}
+
+async fn cleanup_unused_links(pool: &Pool<Postgres>) -> Result<u64> {
+    const UNUSED_LINK_TTL_DAYS: i64 = 30;
+
+    let rec = sqlx::query(
+        r#"
+        DELETE FROM links
+        WHERE hitcount = 0
+          AND last_access < now() - ($1 * INTERVAL '1 day')
+        "#,
+    )
+    .bind(UNUSED_LINK_TTL_DAYS)
+    .execute(pool)
+    .await?;
+
+    Ok(rec.rows_affected())
 }
 
 pub async fn run(config: Settings) -> Result<()> {
