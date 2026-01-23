@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use sqlx::PgPool;
@@ -8,22 +8,10 @@ use crate::metrics::{Metrics, MetricsMap};
 
 // TODO: move it into settings?
 const CHUNK_SIZE: usize = 50;
-const INTERVAL_S: u64 = 15;
 
-pub async fn run(pool: PgPool, metrics: Arc<Metrics>) {
-    let mut interval = tokio::time::interval(Duration::from_secs(INTERVAL_S));
+pub async fn process_daily_metrics(pool: PgPool, metrics: Arc<Metrics>) -> Result<()> {
+    let map: Arc<MetricsMap> = metrics.swap_map();
 
-    loop {
-        interval.tick().await;
-
-        let map = metrics.swap_map();
-        if let Err(e) = process_batch(&pool, &map).await {
-            tracing::error!(error = %e, "error when flushing metrics");
-        }
-    }
-}
-
-pub async fn process_batch(pool: &PgPool, map: &MetricsMap) -> Result<()> {
     if map.is_empty() {
         return Ok(());
     }
@@ -54,7 +42,7 @@ pub async fn process_batch(pool: &PgPool, map: &MetricsMap) -> Result<()> {
 
         // Flush once a chunk is full
         if link_id_col.len() == CHUNK_SIZE {
-            flush_to_db(pool, &link_id_col, &hits_col, &last_access_col).await?;
+            flush_to_db(&pool, &link_id_col, &hits_col, &last_access_col).await?;
             // Clear columns
             link_id_col.clear();
             hits_col.clear();
@@ -63,7 +51,7 @@ pub async fn process_batch(pool: &PgPool, map: &MetricsMap) -> Result<()> {
     }
 
     // Flush the rest
-    flush_to_db(pool, &link_id_col, &hits_col, &last_access_col).await?;
+    flush_to_db(&pool, &link_id_col, &hits_col, &last_access_col).await?;
     tracing::info!("Updated {} entries", entries_updated);
 
     Ok(())

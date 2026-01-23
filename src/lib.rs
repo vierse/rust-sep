@@ -4,5 +4,6 @@ pub mod config;
 pub mod db;
 pub mod domain;
 pub mod metrics;
+pub mod scheduler;
 pub mod services;
 pub mod tasks;
