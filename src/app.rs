@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use moka::future::Cache;
 use sqids::Sqids;
 use sqlx::{PgPool, postgres::PgPoolOptions};
-use tokio::{net::TcpListener, signal, time::timeout};
+use tokio::{net::TcpListener, time::timeout};
 use tokio_util::sync::CancellationToken;
 
 use crate::{api, config::Settings, metrics::Metrics, scheduler::Scheduler, tasks};
@@ -108,15 +108,8 @@ pub async fn run(config: Settings) -> Result<()> {
         })
     };
 
-    match signal::ctrl_c().await {
-        Ok(()) => {
-            tracing::info!("Shutting down API...");
-            cancel_main.cancel();
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to listen for shutdown signal");
-        }
-    }
+    wait_for_shutdown().await;
+    cancel_main.cancel();
 
     let server_result = timeout(Duration::from_secs(60), server_handle).await;
     match server_result {
@@ -131,4 +124,22 @@ pub async fn run(config: Settings) -> Result<()> {
     scheduler.shutdown(60).await;
 
     Ok(())
+}
+
+async fn wait_for_shutdown() {
+    use tokio::signal::{
+        self,
+        unix::{SignalKind, signal},
+    };
+
+    let mut sig_term = signal(SignalKind::terminate()).expect("SIGTERM error");
+
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+            tracing::info!("Received Ctrl+C (SIGINT). Shutting down...");
+        }
+        _ = sig_term.recv() => {
+            tracing::info!("Received SIGTERM. Shutting down...");
+        }
+    }
 }
