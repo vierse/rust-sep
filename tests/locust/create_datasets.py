@@ -1,7 +1,7 @@
 import random
-import time
 import uuid
-from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Tuple
 
 import requests as rq
 
@@ -11,6 +11,9 @@ N_REQUESTS = 10_000
 ENDPOINT = "http://localhost:3000/api/shorten"
 OUTPUT1 = "data_aliases.txt"
 OUTPUT2 = "data_urls.txt"
+MAX_WORKERS = 40
+TIMEOUT_S = 5
+
 
 # random url settings
 RANDOM_URL_SCHEMES = ["https", "http"]
@@ -27,60 +30,77 @@ RANDOM_PATH_WORDS = [
 ]
 P_INCLUDE_QUERY = 0.6
 
+
 def make_random_url() -> str:
     scheme = random.choice(RANDOM_URL_SCHEMES)
     host = random.choice(RANDOM_URL_BASES)
 
-    segments = []
-    for _ in range(random.randint(1, 4)):
-        w = random.choice(RANDOM_PATH_WORDS)
-        segments.append(w)
-
-    # sometimes include uuid segment
+    segments = [random.choice(RANDOM_PATH_WORDS) for _ in range(random.randint(1, 4))]
     if random.random() < 0.25:
         segments.append(uuid.uuid4().hex[:12])
 
-    path = "/" + "/".join(segments)
+    url = f"{scheme}://{host}/" + "/".join(segments)
 
-    url = f"{scheme}://{host}{path}"
-
-    # sometimes include query
     if random.random() < P_INCLUDE_QUERY:
-        q = {
-            "ref": random.choice(["a", "b", "c", "newsletter", "social"]),
-            "id": str(random.randint(1, 1_000_000)),
-        }
-        url += f"?ref={q['ref']}&id={q['id']}"
+        ref = random.choice(["a", "b", "c", "newsletter", "social"])
+        _id = random.randint(1, 1_000_000)
+        url += f"?ref={ref}&id={_id}"
 
     return url
 
-def shorten_request(session: rq.Session, payload: dict) -> Optional[dict]:
-    r = session.post(ENDPOINT, json=payload, timeout=5)
 
-    assert r.status_code == 201, "request failed"
-    
-    return r.json()
+def shorten_url(url: str) -> str:
+    with rq.Session() as session:
+        r = session.post(ENDPOINT, json={"url": url}, timeout=TIMEOUT_S)
+
+    if r.status_code != 201:
+        raise RuntimeError(f"HTTP {r.status_code} for {url}: {r.text[:200]}")
+
+    data = r.json()
+    alias = data.get("alias")
+    if not alias:
+        raise RuntimeError(f"missing alias for {url}: {data}")
+    return alias
+
+
+def worker(i: int) -> Tuple[int, str, str]:
+    url = make_random_url()
+    alias = shorten_url(url)
+    return i, url, alias
 
 
 def main() -> None:
-    with rq.Session() as session, open(OUTPUT1, "w", encoding="utf-8") as out1, open(OUTPUT2, "w", encoding="utf-8") as out2:
-        for n in range(N_REQUESTS):
-            random_url = make_random_url()
-            out2.write(random_url + "\n")
+    results_url = [""] * N_REQUESTS
+    results_alias = [""] * N_REQUESTS
 
-            payload = { "url": random_url }
+    processed = 0
+    futures = []
 
-            response = shorten_request(session, payload)
-            alias = response.get("alias")
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+        futures = [ex.submit(worker, i) for i in range(N_REQUESTS)]
 
-            out1.write(alias + "\n")
+        try:
+            for fut in as_completed(futures):
+                i, url, alias = fut.result()
+                results_url[i] = url
+                results_alias[i] = alias
 
-            if (n + 1) % 25 == 0:
-                print(f"processed {n + 1}/{N_REQUESTS}")
-            
-            time.sleep(0.02)
+                processed += 1
+                if processed % 25 == 0:
+                    print(f"processed {processed}/{N_REQUESTS}")
 
-    print(f"done")
+        except Exception:
+            # cancel impending futures
+            for f in futures:
+                f.cancel()
+            raise
+
+    with open(OUTPUT2, "w", encoding="utf-8") as out2:
+        out2.write("\n".join(results_url) + "\n")
+    with open(OUTPUT1, "w", encoding="utf-8") as out1:
+        out1.write("\n".join(results_alias) + "\n")
+
+    print("done")
 
 
 if __name__ == "__main__":
