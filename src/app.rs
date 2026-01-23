@@ -4,9 +4,10 @@ use anyhow::{Context, Result};
 use moka::future::Cache;
 use sqids::Sqids;
 use sqlx::{PgPool, postgres::PgPoolOptions};
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, signal, time::timeout};
+use tokio_util::sync::CancellationToken;
 
-use crate::{api, config::Settings, metrics::Metrics, tasks};
+use crate::{api, config::Settings, metrics::Metrics, scheduler::Scheduler, tasks};
 
 #[derive(Debug, Clone)]
 pub struct CachedLink {
@@ -39,7 +40,12 @@ pub async fn connect_to_db(database_url: &str) -> Result<PgPool> {
     Ok(pool)
 }
 
-pub async fn build_app_state(pool: PgPool) -> Result<AppState> {
+pub fn build_test_app_state(pool: PgPool) -> Result<AppState> {
+    let metrics = Arc::new(Metrics::new());
+    build_app_state(pool, metrics)
+}
+
+pub fn build_app_state(pool: PgPool, metrics: Arc<Metrics>) -> Result<AppState> {
     const MIN_ALIAS_LENGTH: u8 = 6;
     // Shuffled alphabet for Sqids to generate ids from
     const ALPHABET: &str = "79Hr0JZijqWTnxhgoDEKMRpX4FNIfywG3e6LcldO5bCUYSBPa81s2QAumtzVvk";
@@ -51,20 +57,6 @@ pub async fn build_app_state(pool: PgPool) -> Result<AppState> {
             .alphabet(ALPHABET.chars().collect())
             .build()?,
     );
-
-    let metrics = Arc::new(Metrics::new());
-
-    {
-        let pool = pool.clone();
-        tokio::spawn(tasks::daily_partition::run(pool));
-    }
-
-    // TODO: notify?
-    {
-        let pool = pool.clone();
-        let metrics = metrics.clone();
-        tokio::spawn(tasks::flush_metrics::run(pool, metrics));
-    }
 
     let cache: Cache<String, Option<CachedLink>> = Cache::new(1_000);
 
@@ -78,7 +70,10 @@ pub async fn build_app_state(pool: PgPool) -> Result<AppState> {
 
 pub async fn run(config: Settings) -> Result<()> {
     let pool = connect_to_db(config.database_url.as_str()).await?;
-    let state = build_app_state(pool.clone()).await?;
+
+    let metrics = Arc::new(Metrics::new());
+
+    let state = build_app_state(pool.clone(), metrics.clone())?;
     let router = api::build_router(state);
 
     let addr = format!("0.0.0.0:{}", config.port);
@@ -86,7 +81,54 @@ pub async fn run(config: Settings) -> Result<()> {
 
     tracing::info!("App running on {addr}");
 
-    axum::serve(listener, router).await?;
+    let mut scheduler = Scheduler::new();
+
+    scheduler.spawn_task(
+        Scheduler::SECONDS_IN_DAY,
+        "daily_partition",
+        pool.clone(),
+        |p| async move { tasks::create_daily_partitions(p).await },
+    );
+
+    scheduler.spawn_task(
+        15,
+        "daily_metrics",
+        (pool.clone(), metrics.clone()),
+        |(p, m)| async move { tasks::process_daily_metrics(p, m).await },
+    );
+
+    let cancel_main = CancellationToken::new();
+    let server_handle = {
+        let cancel = cancel_main.clone();
+        let server = axum::serve(listener, router);
+        tokio::spawn(async move {
+            server
+                .with_graceful_shutdown(cancel.cancelled_owned())
+                .await
+        })
+    };
+
+    match signal::ctrl_c().await {
+        Ok(()) => {
+            tracing::info!("Shutting down API...");
+            cancel_main.cancel();
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to listen for shutdown signal");
+        }
+    }
+
+    let server_result = timeout(Duration::from_secs(60), server_handle).await;
+    match server_result {
+        Ok(result) => {
+            tracing::info!("API shutdown successful");
+            result??
+        }
+        Err(_) => tracing::error!("Timed out on shutdown"),
+    }
+
+    tracing::info!("Shutting down background tasks...");
+    scheduler.shutdown(60).await;
 
     Ok(())
 }

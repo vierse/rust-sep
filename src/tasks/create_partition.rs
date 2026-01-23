@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use anyhow::Result;
 use sqlx::PgPool;
 use time::{
@@ -10,21 +8,11 @@ use time::{
 static PART_NAME_DATE_FD: StaticFormatDescription = format_description!("[year][month][day]");
 static ISO_DATE_FD: StaticFormatDescription = format_description!("[year]-[month]-[day]");
 
-pub async fn run(pool: PgPool) {
-    let mut interval = tokio::time::interval(Duration::from_hours(24));
+pub async fn create_daily_partitions(pool: PgPool) -> Result<()> {
+    tracing::info!("Creating daily metrics partitions...");
 
-    loop {
-        interval.tick().await;
-
-        if let Err(e) = create_daily_partition(&pool).await {
-            tracing::error!(error = %e, "Failed to create daily partitions");
-        }
-    }
-}
-
-async fn create_daily_partition(pool: &PgPool) -> Result<()> {
     let today: Date = sqlx::query_scalar("SELECT CURRENT_DATE")
-        .fetch_one(pool)
+        .fetch_one(&pool)
         .await?;
 
     // Create partitions for 4 days
@@ -48,9 +36,7 @@ async fn create_daily_partition(pool: &PgPool) -> Result<()> {
             to = iso_end,
         );
 
-        sqlx::query(&sql).execute(pool).await?;
-
-        tracing::info!("Created daily partition {part_name}");
+        sqlx::query(&sql).execute(&pool).await?;
     }
 
     Ok(())

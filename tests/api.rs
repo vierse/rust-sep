@@ -21,7 +21,7 @@ async fn json<T: DeserializeOwned>(response: Response) -> T {
 }
 
 async fn router(pool: PgPool) -> Router {
-    let state = app::build_app_state(pool).await.unwrap();
+    let state = app::build_test_app_state(pool).unwrap();
     api::build_router(state.into())
 }
 

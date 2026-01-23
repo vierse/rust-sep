@@ -1,4 +1,5 @@
 use anyhow::Result;
+
 use url_shorten::{app, config};
 
 #[tokio::main]
