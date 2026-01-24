@@ -1,13 +1,20 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
+use argon2::Argon2;
 use moka::future::Cache;
 use sqids::Sqids;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::{net::TcpListener, time::timeout};
 use tokio_util::sync::CancellationToken;
 
-use crate::{api, config::Settings, metrics::Metrics, scheduler::Scheduler, tasks};
+use crate::{
+    api::{self, Sessions},
+    config::Settings,
+    metrics::Metrics,
+    scheduler::Scheduler,
+    tasks,
+};
 
 #[derive(Debug, Clone)]
 pub struct CachedLink {
@@ -21,6 +28,8 @@ pub struct AppState {
     pub sqids: Arc<Sqids>,
     pub metrics: Arc<Metrics>,
     pub cache: Cache<String, Option<CachedLink>>,
+    pub sessions: Arc<Sessions>,
+    pub hasher: Arc<Argon2<'static>>,
 }
 
 pub async fn connect_to_db(database_url: &str) -> Result<PgPool> {
@@ -65,6 +74,8 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<Metrics>) -> Result<AppState> 
         sqids,
         metrics,
         cache,
+        sessions: Arc::new(Sessions::new()),
+        hasher: Arc::new(Argon2::default()),
     })
 }
 

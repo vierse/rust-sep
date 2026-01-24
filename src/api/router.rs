@@ -14,7 +14,8 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/api/shorten", post(handlers::shorten))
         .route("/r/{alias}", get(handlers::redirect))
-        .route("/api/recent", get(handlers::recently_added_links))
+        .route("/api/auth/register", post(handlers::register))
+        .route("/api/auth/login", post(handlers::login))
         .with_state(state)
         .fallback_service(serve)
 }
