@@ -4,10 +4,10 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 
-use crate::app::AppState;
+use crate::app::{AppState, usage_metrics::Category};
 
 pub async fn redirect(State(app): State<AppState>, Path(alias): Path<String>) -> impl IntoResponse {
-    app.metrics.log_redirect().await;
+    app.metrics.log(Category::Redirect).await;
 
     match app.get_url(&alias).await {
         Ok(url) => Redirect::permanent(&url).into_response(),
