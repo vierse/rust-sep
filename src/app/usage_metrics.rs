@@ -1,17 +1,18 @@
+use std::sync::atomic::{AtomicUsize, Ordering::Acquire};
 use time::OffsetDateTime;
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default)]
 pub struct Day {
     hours: [Hour; 24],
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default)]
 pub struct Hour {
-    redirect: usize,
+    redirect: AtomicUsize,
     // webpage: usize,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct Metrics {
     week_days: [Day; 7],
     // woul be 31 * 12 * 24 * 16 bytes
@@ -19,7 +20,7 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub async fn log_redirect(&mut self) {
+    pub async fn log_redirect(&self) {
         let date_time = OffsetDateTime::now_utc();
         let date = date_time.date();
         let time = date_time.time();
@@ -30,7 +31,9 @@ impl Metrics {
 
         let hour = time.hour() as usize;
 
-        self.week_days[week_day].hours[hour].redirect += 1;
+        self.week_days[week_day].hours[hour]
+            .redirect
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         // self.months[month][month_day].hours[hour].redirect += 1;
     }
 }
@@ -41,14 +44,15 @@ impl Day {
     }
 
     pub fn total_redirects(&self) -> usize {
-        self.hours.map(|h| h.redirect).into_iter().sum()
+        self.hours.iter().map(|h| h.redirect.load(Acquire)).sum()
     }
 
     /// returns the hour that has seen the most redirects
     pub fn most_redirects(&self) -> usize {
         let (idx, _reds) = self
             .hours
-            .map(|h| h.redirect)
+            .iter()
+            .map(|h| h.redirect.load(Acquire))
             .into_iter()
             .enumerate()
             .max_by_key(|(_, reds)| *reds)
@@ -61,12 +65,12 @@ impl Day {
     pub fn redirects_fraction(&self, hour: usize) -> anyhow::Result<f64> {
         anyhow::ensure!(hour < self.hours.len(), "given hour doesn't fit in a day");
 
-        Ok(self.hours[hour].redirect as f64 / self.total_redirects() as f64)
+        Ok(self.hours[hour].redirect.load(Acquire) as f64 / self.total_redirects() as f64)
     }
 
     pub fn redirects(&self, hour: usize) -> anyhow::Result<usize> {
         anyhow::ensure!(hour < self.hours.len(), "given hour doesn't fit in a day");
 
-        Ok(self.hours[hour].redirect)
+        Ok(self.hours[hour].redirect.load(Acquire))
     }
 }
