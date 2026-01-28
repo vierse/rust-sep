@@ -8,6 +8,7 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use time::Date;
 use tokio::{net::TcpListener, time::timeout};
 use tokio_util::sync::CancellationToken;
+pub mod usage_metrics;
 
 use crate::{
     api::{self, Sessions},
@@ -31,6 +32,7 @@ pub struct AppState {
     pub pool: PgPool,
     pub sqids: Arc<Sqids>,
     pub metrics: Arc<Metrics>,
+    pub usage_metrics: std::sync::Arc<usage_metrics::Metrics>,
     pub cache: Cache<String, Option<CachedLink>>,
     pub sessions: Arc<Sessions>,
     pub hasher: Arc<Argon2<'static>>,
@@ -79,6 +81,7 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<Metrics>) -> Result<AppState> 
         cache,
         sessions: Arc::new(Sessions::new()),
         hasher: Arc::new(Argon2::default()),
+        usage_metrics: Default::default(),
     })
 }
 
