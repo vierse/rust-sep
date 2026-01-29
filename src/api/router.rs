@@ -16,6 +16,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/r/{alias}", get(handlers::redirect))
         .route("/api/auth/register", post(handlers::register))
         .route("/api/auth/login", post(handlers::login))
+        .route("/api/user/list", get(handlers::list_links))
         .with_state(state)
         .fallback_service(serve)
 }

@@ -9,7 +9,7 @@ use cookie::{Cookie, SameSite};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api::{error::ApiError, session::SessionData},
+    api::{auth::MaybeUser, error::ApiError, session::SessionData},
     app::AppState,
     services,
 };
@@ -32,10 +32,18 @@ impl IntoResponse for LoginResponse {
 }
 
 pub async fn login(
+    MaybeUser(user): MaybeUser,
     State(app): State<AppState>,
     Json(LoginRequest { username, password }): Json<LoginRequest>,
 ) -> Result<Response<Body>, ApiError> {
     // TODO: validate length
+
+    if user.is_some() {
+        return Err(ApiError::public(
+            StatusCode::BAD_REQUEST,
+            "Already signed in",
+        ));
+    }
 
     let user_id = services::verify_user_password(&username, &password, &app.hasher, &app.pool)
         .await

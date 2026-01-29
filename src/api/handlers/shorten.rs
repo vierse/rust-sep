@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api::error::ApiError,
+    api::{auth::MaybeUser, error::ApiError},
     app::AppState,
     domain::{Alias, Url},
     services,
@@ -32,6 +32,7 @@ impl IntoResponse for ShortenResponse {
 }
 
 pub async fn shorten(
+    MaybeUser(user): MaybeUser,
     State(app): State<AppState>,
     Json(ShortenRequest { url, name }): Json<ShortenRequest>,
 ) -> Result<ShortenResponse, ApiError> {
@@ -60,12 +61,17 @@ pub async fn shorten(
                 ApiError::from(e)
             })?;
 
-            let result = services::create_link_with_alias(url.as_str(), alias.as_str(), &app.pool)
-                .await
-                .map_err(|e| {
-                    tracing::error!(error = %e, "app error");
-                    ApiError::internal()
-                })?;
+            let result = services::create_link_with_alias(
+                url.as_str(),
+                alias.as_str(),
+                &app.pool,
+                user.as_ref(),
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "app error");
+                ApiError::internal()
+            })?;
 
             if !result {
                 tracing::debug!(cause = %alias.as_str(), "alias already taken");
@@ -80,7 +86,7 @@ pub async fn shorten(
 
         // If request does not contain an alias, generate a new one
         None => {
-            let alias = services::create_link(url.as_str(), &app.sqids, &app.pool)
+            let alias = services::create_link(url.as_str(), &app.sqids, &app.pool, user.as_ref())
                 .await
                 .map_err(|e| {
                     tracing::error!(error = %e, "app error");
