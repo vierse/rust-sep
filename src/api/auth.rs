@@ -1,16 +1,14 @@
 use axum::{
     extract::FromRequestParts,
-    http::{HeaderMap, HeaderValue, StatusCode, header, request::Parts},
+    http::{HeaderMap, StatusCode, header, request::Parts},
 };
 use cookie::Cookie;
 
-use crate::app::AppState;
+use crate::{app::AppState, domain::User};
 
-pub struct User {
-    pub user_id: i64,
-}
+pub struct RequireUser(pub User);
 
-impl FromRequestParts<AppState> for User {
+impl FromRequestParts<AppState> for RequireUser {
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(
@@ -25,7 +23,7 @@ impl FromRequestParts<AppState> for User {
             .get_user_id(&session_id)
             .map_err(|_| (StatusCode::UNAUTHORIZED, "Not logged in"))?;
 
-        Ok(User { user_id })
+        Ok(RequireUser(User::new(user_id)))
     }
 }
 
@@ -46,7 +44,7 @@ impl FromRequestParts<AppState> for MaybeUser {
                 .get_user_id(&session_id)
                 .map_err(|_| (StatusCode::UNAUTHORIZED, "Not logged in"))?;
 
-            return Ok(MaybeUser(Some(User { user_id })));
+            return Ok(MaybeUser(Some(User::new(user_id))));
         }
 
         Ok(MaybeUser(None))

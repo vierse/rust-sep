@@ -1,19 +1,12 @@
-use anyhow::{Context, anyhow};
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
-use rand_core::OsRng;
+use anyhow::Context;
 use sqids::Sqids;
 use sqlx::PgPool;
-use thiserror::Error;
 
-use crate::{app::CachedLink, domain::Url};
-
-#[derive(Debug, Error)]
-pub enum ServiceError {
-    #[error("database error {0}")]
-    DatabaseError(#[from] sqlx::Error),
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
-}
+use crate::{
+    app::CachedLink,
+    domain::{Url, User, UserId},
+    services::ServiceError,
+};
 
 /// Create a new link for the provided URL
 #[tracing::instrument(name = "services::create_link", skip(generator, pool))]
@@ -21,17 +14,20 @@ pub async fn create_link(
     url: &str,
     generator: &Sqids,
     pool: &PgPool,
+    user: Option<&User>,
 ) -> Result<String, ServiceError> {
-    let mut tx = pool.begin().await.map_err(ServiceError::DatabaseError)?;
+    let user_id: Option<UserId> = user.map(|u| u.id());
 
+    let mut tx = pool.begin().await.map_err(ServiceError::DatabaseError)?;
     // Insert the url into database to get a unique id
     let rec = sqlx::query!(
         r#"
-        INSERT INTO links_main (url)
-        VALUES ($1)
+        INSERT INTO links_main (url, user_id)
+        VALUES ($1, $2)
         RETURNING id
         "#,
         url,
+        user_id,
     )
     .fetch_one(&mut *tx)
     .await
@@ -77,16 +73,20 @@ pub async fn create_link_with_alias(
     url: &str,
     alias: &str,
     pool: &PgPool,
+    user: Option<&User>,
 ) -> Result<bool, ServiceError> {
+    let user_id: Option<UserId> = user.map(|u| u.id());
+
     let rec = sqlx::query!(
         r#"
-        INSERT INTO links_main (alias, url)
-        VALUES ($1, $2)
+        INSERT INTO links_main (alias, url, user_id)
+        VALUES ($1, $2, $3)
         ON CONFLICT (alias) DO NOTHING
         RETURNING id
         "#,
         alias,
         url,
+        user_id,
     )
     .fetch_optional(pool)
     .await
@@ -120,66 +120,32 @@ pub async fn query_link_by_alias(
         .transpose()
 }
 
-#[tracing::instrument(name = "services::create_user_account", skip_all)]
-pub async fn create_user_account(
-    username: &str,
-    password: &str,
-    hasher: &Argon2<'_>,
+/// List user's links
+#[tracing::instrument(name = "services::query_link_by_alias", skip(pool))]
+pub async fn query_links_by_user(
+    user: &User,
     pool: &PgPool,
-) -> Result<i64, ServiceError> {
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = hasher
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|_| anyhow!("failed to hash"))?;
-
-    let rec = sqlx::query!(
+) -> Result<Vec<CachedLink>, ServiceError> {
+    let rec_vec = sqlx::query!(
         r#"
-        INSERT INTO users_main (username, password_hash)
-        VALUES ($1, $2)
-        ON CONFLICT (username) DO NOTHING
-        RETURNING id
+        SELECT id, alias, url, created_at
+        FROM links_main
+        WHERE user_id = $1
+        ORDER BY created_at DESC
         "#,
-        username,
-        hash.to_string()
+        user.id()
     )
-    .fetch_optional(pool)
+    .fetch_all(pool)
     .await
     .map_err(ServiceError::DatabaseError)?;
 
-    Ok(rec.unwrap().id)
-}
+    let links: Vec<CachedLink> = rec_vec
+        .into_iter()
+        .map(|rec| CachedLink {
+            id: rec.id,
+            url: rec.url,
+        })
+        .collect();
 
-pub async fn verify_user_password(
-    username: &str,
-    password: &str,
-    hasher: &Argon2<'_>,
-    pool: &PgPool,
-) -> Result<Option<i64>, ServiceError> {
-    let rec = sqlx::query!(
-        r#"
-        SELECT id, password_hash
-        FROM users_main
-        WHERE username = $1
-        "#,
-        username
-    )
-    .fetch_optional(pool)
-    .await
-    .context("failed to fetch user password hash")?;
-
-    let Some(rec) = rec else {
-        return Ok(None);
-    };
-
-    let parsed_hash = PasswordHash::new(&rec.password_hash)
-        .map_err(|e| anyhow::anyhow!("invalid password hash: {e}"))?;
-
-    if hasher
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .is_ok()
-    {
-        Ok(Some(rec.id))
-    } else {
-        Ok(None)
-    }
+    Ok(links)
 }
