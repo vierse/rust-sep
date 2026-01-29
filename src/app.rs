@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     api::{self, Sessions},
     config::Settings,
+    domain::MIN_ALIAS_LENGTH,
     metrics::Metrics,
     scheduler::Scheduler,
     tasks,
@@ -55,14 +56,13 @@ pub fn build_test_app_state(pool: PgPool) -> Result<AppState> {
 }
 
 pub fn build_app_state(pool: PgPool, metrics: Arc<Metrics>) -> Result<AppState> {
-    const MIN_ALIAS_LENGTH: u8 = 6;
     // Shuffled alphabet for Sqids to generate ids from
     const ALPHABET: &str = "79Hr0JZijqWTnxhgoDEKMRpX4FNIfywG3e6LcldO5bCUYSBPa81s2QAumtzVvk";
 
     // Initialize Sqids generator
     let sqids = Arc::new(
         Sqids::builder()
-            .min_length(MIN_ALIAS_LENGTH)
+            .min_length(MIN_ALIAS_LENGTH as u8)
             .alphabet(ALPHABET.chars().collect())
             .build()?,
     );

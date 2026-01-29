@@ -9,8 +9,9 @@ use cookie::{Cookie, SameSite};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api::{auth::MaybeUser, error::ApiError, session::SessionData},
+    api::{auth::MaybeUser, error::ApiError},
     app::AppState,
+    domain::User,
     services,
 };
 
@@ -52,7 +53,7 @@ pub async fn register(
             ApiError::internal()
         })?;
 
-    let session_id = app.sessions.new_session(SessionData { user_id });
+    let session_id = app.sessions.new_session(User::new(user_id));
 
     let cookie = Cookie::build(("sid", session_id.as_str()))
         .path("/")
