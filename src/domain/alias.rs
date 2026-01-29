@@ -1,7 +1,7 @@
 use thiserror::Error;
 
-const MIN_ALIAS_LENGTH: usize = 6;
-const MAX_ALIAS_LENGTH: usize = 20;
+pub const MIN_ALIAS_LENGTH: usize = 6;
+pub const MAX_ALIAS_LENGTH: usize = 20;
 
 #[derive(Debug)]
 pub struct Alias(String);

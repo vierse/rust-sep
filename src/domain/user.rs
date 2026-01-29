@@ -7,9 +7,7 @@ pub struct User {
 
 impl User {
     pub fn new(id: UserId) -> Self {
-        Self {
-            id
-        }
+        Self { id }
     }
 
     pub fn id(&self) -> UserId {

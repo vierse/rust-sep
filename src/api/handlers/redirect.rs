@@ -3,10 +3,7 @@ use axum::{
     response::Redirect,
 };
 
-// TODO: unite all the constants into the app settings
-const MAX_ALIAS_LENGTH: usize = 20;
-
-use crate::{api::error::ApiError, app::AppState, services};
+use crate::{api::error::ApiError, app::AppState, domain::MAX_ALIAS_LENGTH, services};
 
 pub async fn redirect(
     State(app): State<AppState>,

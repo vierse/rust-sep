@@ -4,9 +4,7 @@ use base64::Engine;
 use dashmap::DashMap;
 use rand_core::{OsRng, RngCore};
 
-pub struct SessionData {
-    pub user_id: i64,
-}
+use crate::domain::{User, UserId};
 
 pub enum SessionError {
     NotExists,
@@ -14,7 +12,7 @@ pub enum SessionError {
 }
 
 pub struct Sessions {
-    inner: Arc<DashMap<String, SessionData>>,
+    inner: Arc<DashMap<String, User>>,
 }
 
 pub struct SessionId(pub String);
@@ -32,23 +30,23 @@ impl Sessions {
         }
     }
 
-    pub fn new_session(&self, session: SessionData) -> SessionId {
+    pub fn new_session(&self, user: User) -> SessionId {
         use base64::engine::general_purpose::URL_SAFE_NO_PAD as Base64;
 
         let mut bytes = [0u8; 32];
         OsRng.fill_bytes(&mut bytes);
 
         let session_id = Base64.encode(bytes);
-        self.inner.insert(session_id.clone(), session);
+        self.inner.insert(session_id.clone(), user);
 
         SessionId(session_id)
     }
 
-    pub fn get_user_id(&self, session_id: &str) -> Result<i64, SessionError> {
+    pub fn get_user_id(&self, session_id: &str) -> Result<UserId, SessionError> {
         if let Some(entry) = self.inner.get(session_id) {
-            let session_data = entry.value();
+            let user = entry.value();
 
-            Ok(session_data.user_id)
+            Ok(user.id())
         } else {
             Err(SessionError::NotExists)
         }
