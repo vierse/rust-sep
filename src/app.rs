@@ -97,7 +97,11 @@ impl std::error::Error for GetUrlError {
 
 impl AppState {
     #[tracing::instrument(name = "app::shorten_url", skip(self))]
-    pub async fn shorten_url(&self, url: &str, expires_at: Option<OffsetDateTime>) -> Result<String> {
+    pub async fn shorten_url(
+        &self,
+        url: &str,
+        expires_at: Option<OffsetDateTime>,
+    ) -> Result<String> {
         let mut tx: Transaction<Postgres> = self.pool.begin().await?;
 
         // Insert the url into database to get a unique id
@@ -201,7 +205,12 @@ impl AppState {
     }
 
     #[tracing::instrument(name = "app::save_named_url", skip(self))]
-    pub async fn save_named_url(&self, alias: &str, url: &str, expires_at: Option<OffsetDateTime>) -> Result<(), AppError> {
+    pub async fn save_named_url(
+        &self,
+        alias: &str,
+        url: &str,
+        expires_at: Option<OffsetDateTime>,
+    ) -> Result<(), AppError> {
         let rec = sqlx::query!(
             r#"
             INSERT INTO links (alias, url, expires_at)
