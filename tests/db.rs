@@ -14,7 +14,7 @@ async fn test_remove() {
     assert!(!removed, "should return false for nonexistent alias");
 
     // removing existent alias returns true
-    let alias = state.shorten_url("https://a_url.com").await.unwrap();
+    let alias = state.shorten_url("https://a_url.com", None).await.unwrap();
     let removed = db.remove(&alias).await.unwrap();
     assert!(removed, "should return true for existent alias");
 }

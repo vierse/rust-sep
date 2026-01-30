@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE links\n            SET hitcount = hitcount + 1, last_access = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c4f6662532bcf8f21d82f5b0e5b62d5892333359f76e69ce25d72a9b3a7e2edf"
+}

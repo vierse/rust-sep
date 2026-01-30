@@ -45,6 +45,7 @@ impl IntoResponse for AppError {
 #[derive(Debug)]
 pub enum GetUrlError {
     AliasNotFount,
+    LinkExpired,
     /// failed to log the hit, but succeeded in getting the url
     HitLogFail(String, sqlx::Error),
     DBErr(sqlx::Error),
@@ -55,6 +56,7 @@ impl PartialEq for GetUrlError {
         use GetUrlError::*;
         match (self, other) {
             (AliasNotFount, AliasNotFount) => true,
+            (LinkExpired, LinkExpired) => true,
             (HitLogFail(url, _), HitLogFail(url1, _)) => url == url1,
             (DBErr(_), DBErr(_)) => true,
             _ => false,
@@ -66,6 +68,7 @@ impl std::fmt::Display for GetUrlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GetUrlError::AliasNotFount => write!(f, "couldn't find alias in the db"),
+            GetUrlError::LinkExpired => write!(f, "the link has expired"),
             GetUrlError::HitLogFail(_, error) => {
                 write!(
                     f,
@@ -81,6 +84,7 @@ impl std::error::Error for GetUrlError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::AliasNotFount => None,
+            Self::LinkExpired => None,
             Self::HitLogFail(_, e) => Some(e),
             Self::DBErr(e) => Some(e),
         }
@@ -93,17 +97,18 @@ impl std::error::Error for GetUrlError {
 
 impl AppState {
     #[tracing::instrument(name = "app::shorten_url", skip(self))]
-    pub async fn shorten_url(&self, url: &str) -> Result<String> {
+    pub async fn shorten_url(&self, url: &str, expires_at: Option<OffsetDateTime>) -> Result<String> {
         let mut tx: Transaction<Postgres> = self.pool.begin().await?;
 
         // Insert the url into database to get a unique id
         let rec = sqlx::query!(
             r#"
-            INSERT INTO links (url)
-            VALUES ($1)
+            INSERT INTO links (url, expires_at)
+            VALUES ($1, $2)
             RETURNING id
             "#,
             url,
+            expires_at,
         )
         .fetch_one(&mut *tx)
         .await
@@ -139,15 +144,15 @@ impl AppState {
 
     /// queries a url, directly updating the hitcount
     /// # Errors
-    /// fails if the requested alias does not exist in the database
+    /// fails if the requested alias does not exist in the database or if the link has expired
     #[tracing::instrument(name = "app::get_url", skip(self))]
     pub async fn get_url(&self, alias: &str) -> std::result::Result<String, GetUrlError> {
+        // First fetch the link to check expiration
         let link = sqlx::query!(
             r#"
-            UPDATE links
-            SET hitcount = hitcount + 1, last_access = now()
+            SELECT url, id, expires_at
+            FROM links
             WHERE alias = $1
-            RETURNING url, id
             "#,
             alias
         )
@@ -158,6 +163,26 @@ impl AppState {
         let Some(link) = link else {
             return Err(GetUrlError::AliasNotFount);
         };
+
+        // Check if link has expired
+        if let Some(expires_at) = link.expires_at {
+            if expires_at <= OffsetDateTime::now_utc() {
+                return Err(GetUrlError::LinkExpired);
+            }
+        }
+
+        // Update hitcount and last_access only if not expired
+        sqlx::query!(
+            r#"
+            UPDATE links
+            SET hitcount = hitcount + 1, last_access = now()
+            WHERE id = $1
+            "#,
+            link.id
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(GetUrlError::DBErr)?;
 
         if let Err(db_err) = sqlx::query!(
             r#"
@@ -176,16 +201,17 @@ impl AppState {
     }
 
     #[tracing::instrument(name = "app::save_named_url", skip(self))]
-    pub async fn save_named_url(&self, alias: &str, url: &str) -> Result<(), AppError> {
+    pub async fn save_named_url(&self, alias: &str, url: &str, expires_at: Option<OffsetDateTime>) -> Result<(), AppError> {
         let rec = sqlx::query!(
             r#"
-            INSERT INTO links (alias, url)
-            VALUES ($1, $2)
+            INSERT INTO links (alias, url, expires_at)
+            VALUES ($1, $2, $3)
             ON CONFLICT (alias) DO NOTHING
             RETURNING id
             "#,
             alias,
-            url
+            url,
+            expires_at
         )
         .fetch_optional(&self.pool)
         .await

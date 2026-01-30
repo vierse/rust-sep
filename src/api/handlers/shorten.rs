@@ -1,6 +1,8 @@
 use anyhow::Result;
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
+use sqlx::types::time::OffsetDateTime;
+use time::format_description::well_known::Iso8601;
 use url::Url;
 
 use crate::app::AppState;
@@ -9,6 +11,7 @@ use crate::app::AppState;
 pub struct ShortenRequest {
     pub url: String,
     pub name: Option<String>,
+    pub expires_at: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -18,12 +21,24 @@ pub struct ShortenResponse {
 
 pub async fn shorten(
     State(app): State<AppState>,
-    Json(ShortenRequest { url, name }): Json<ShortenRequest>,
+    Json(ShortenRequest { url, name, expires_at }): Json<ShortenRequest>,
 ) -> impl IntoResponse {
     if let Err(e) = validate_url(&url) {
         tracing::warn!(cause = %e, "URL validation failed");
         return (StatusCode::BAD_REQUEST).into_response();
     }
+
+    // Parse and validate expires_at if provided, otherwise default to 7 days
+    let expires_at = match expires_at {
+        Some(expires_str) => match validate_expires_at(&expires_str) {
+            Ok(dt) => dt,
+            Err(e) => {
+                tracing::warn!(cause = %e, "expires_at validation failed");
+                return (StatusCode::BAD_REQUEST).into_response();
+            }
+        },
+        None => OffsetDateTime::now_utc() + time::Duration::days(7),
+    };
 
     match name {
         // if request contains an alias, validate and save it
@@ -32,14 +47,14 @@ pub async fn shorten(
                 tracing::warn!(cause = %e, "alias validation failed");
                 return (StatusCode::BAD_REQUEST).into_response();
             }
-            match app.save_named_url(&alias, &url).await {
+            match app.save_named_url(&alias, &url, Some(expires_at)).await {
                 Ok(()) => (StatusCode::CREATED, Json(ShortenResponse { alias })).into_response(),
                 Err(e) => e.into_response(),
             }
         }
 
         // if request does not contain an alias, generate a new one
-        None => match app.shorten_url(&url).await {
+        None => match app.shorten_url(&url, Some(expires_at)).await {
             Ok(alias) => (StatusCode::CREATED, Json(ShortenResponse { alias })).into_response(),
             Err(e) => {
                 tracing::error!(error = %e, "shorten request error");
@@ -47,6 +62,32 @@ pub async fn shorten(
             }
         },
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ExpiresAtError {
+    InvalidFormat,
+    InThePast,
+}
+
+impl std::fmt::Display for ExpiresAtError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidFormat => write!(f, "expires_at has invalid ISO 8601 format"),
+            Self::InThePast => write!(f, "expires_at is in the past"),
+        }
+    }
+}
+
+fn validate_expires_at(expires_str: &str) -> Result<OffsetDateTime, ExpiresAtError> {
+    let dt = OffsetDateTime::parse(expires_str, &Iso8601::DEFAULT)
+        .map_err(|_| ExpiresAtError::InvalidFormat)?;
+
+    if dt <= OffsetDateTime::now_utc() {
+        return Err(ExpiresAtError::InThePast);
+    }
+
+    Ok(dt)
 }
 #[derive(Debug, PartialEq, Eq)]
 enum AliasError {

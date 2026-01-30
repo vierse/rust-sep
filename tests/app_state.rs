@@ -18,7 +18,7 @@ async fn test_shorten_url_success(pool: PgPool) {
     let app = setup_app(pool, "test_shorten_url_success").await;
 
     let url = "https://www.example.com";
-    let result = app.shorten_url(url).await;
+    let result = app.shorten_url(url, None).await;
 
     assert!(result.is_ok());
     let alias = result.unwrap();
@@ -45,7 +45,7 @@ async fn test_shorten_url_stress_test(pool: PgPool) {
     let mut aliases = Vec::new();
     for i in 0..100 {
         let url = format!("https://www.example{}.com", i);
-        let result = app.shorten_url(&url).await;
+        let result = app.shorten_url(&url, None).await;
         assert!(
             result.is_ok(),
             "Failed to shorten URL {}: {:?}",
@@ -83,7 +83,7 @@ async fn test_shorten_url_handles_concurrent_insert(pool: PgPool) {
         .map(|_| {
             let app = app.clone();
             let url = url.to_string();
-            tokio::spawn(async move { app.shorten_url(&url).await })
+            tokio::spawn(async move { app.shorten_url(&url, None).await })
         })
         .collect();
 
@@ -128,7 +128,7 @@ async fn test_shorten_url_different_urls_produce_unique_aliases(pool: PgPool) {
 
     let mut aliases = Vec::new();
     for url in &urls {
-        let result = app.shorten_url(url).await;
+        let result = app.shorten_url(url, None).await;
         assert!(result.is_ok(), "Failed to shorten URL: {}", url);
         aliases.push(result.unwrap());
     }
@@ -156,8 +156,8 @@ async fn test_shorten_url_allows_duplicate_urls(pool: PgPool) {
     let app = setup_app(pool, "test_shorten_url_allows_duplicate_urls").await;
 
     let url = "https://www.example.com";
-    let alias1 = app.shorten_url(url).await.unwrap();
-    let alias2 = app.shorten_url(url).await.unwrap();
+    let alias1 = app.shorten_url(url, None).await.unwrap();
+    let alias2 = app.shorten_url(url, None).await.unwrap();
 
     assert_ne!(
         alias1, alias2,
@@ -173,7 +173,7 @@ async fn test_get_last_hit(pool: PgPool) -> Result<()> {
     let app = setup_app(pool, "test_get_last_hit").await;
 
     let url = "https://www.example.com";
-    let alias = app.shorten_url(url).await.unwrap();
+    let alias = app.shorten_url(url, None).await.unwrap();
 
     // just do a very rudimentery test, since I don't want to mess with sleeping in tests
     app.get_url(&alias).await?;
@@ -191,7 +191,7 @@ async fn test_recent_hit_count(pool: PgPool) -> Result<()> {
     let app = setup_app(pool, "test_recent_hit_count").await;
 
     let url = "https://www.example.com";
-    let alias = app.shorten_url(url).await.unwrap();
+    let alias = app.shorten_url(url, None).await.unwrap();
 
     for _ in 0..5 {
         app.get_url(&alias).await?;
