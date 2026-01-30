@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE links\n            SET hitcount = hitcount + 1, last_access = now()\n            WHERE alias = $1\n            RETURNING url, id\n            ",
+  "query": "\n            SELECT url, id, expires_at\n            FROM links\n            WHERE alias = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "ordinal": 1,
         "name": "id",
         "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -21,8 +26,9 @@
     },
     "nullable": [
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "368bdcd6dfd345e0bc37e5522936d8d722e0ddc679f74d703de3a9efd594523b"
+  "hash": "0ea1ba78ed576f43f836b8e4eab5300c15784161de3ef2784d4f1eb0c44de61a"
 }
