@@ -21,7 +21,11 @@ pub struct ShortenResponse {
 
 pub async fn shorten(
     State(app): State<AppState>,
-    Json(ShortenRequest { url, name, expires_at }): Json<ShortenRequest>,
+    Json(ShortenRequest {
+        url,
+        name,
+        expires_at,
+    }): Json<ShortenRequest>,
 ) -> impl IntoResponse {
     if let Err(e) = validate_url(&url) {
         tracing::warn!(cause = %e, "URL validation failed");
