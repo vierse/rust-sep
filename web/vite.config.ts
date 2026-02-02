@@ -8,7 +8,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://api:3000', // route to axum (dev only)
+        target: 'http://localhost:3000', // route to axum (dev only)
         changeOrigin: true,
       },
     },
