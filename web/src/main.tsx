@@ -5,7 +5,7 @@ import { Theme } from "@radix-ui/themes"
 import "@radix-ui/themes/styles.css";
 import "./styles/view.css"
 
-import App from "./app/view";
+import App from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <Theme appearance="dark">
