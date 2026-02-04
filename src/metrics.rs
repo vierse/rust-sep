@@ -20,9 +20,7 @@ pub struct MetricsValue {
 
 impl Metrics {
     pub fn new() -> Self {
-        Self {
-            current: ArcSwap::from_pointee(DashMap::new()),
-        }
+        Self::default()
     }
 
     pub fn record_hit(&self, link_id: i64) {
@@ -51,6 +49,14 @@ impl Metrics {
 
     pub fn swap_map(&self) -> Arc<MetricsMap> {
         self.current.swap(Arc::new(DashMap::new()))
+    }
+}
+
+impl Default for Metrics {
+    fn default() -> Self {
+        Self {
+            current: ArcSwap::from_pointee(DashMap::new()),
+        }
     }
 }
 

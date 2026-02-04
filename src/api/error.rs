@@ -42,10 +42,9 @@ impl ApiError {
 }
 
 impl From<SessionError> for ApiError {
-    fn from(error: SessionError) -> Self {
-        match error {
-            _ => Self::internal(),
-        }
+    fn from(_error: SessionError) -> Self {
+        // TODO: some errors will be relevant for user once frontend notifications are complete
+        Self::internal()
     }
 }
 
