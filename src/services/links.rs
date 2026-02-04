@@ -1,4 +1,5 @@
 use anyhow::Context;
+use serde::Serialize;
 use sqids::Sqids;
 use sqlx::PgPool;
 
@@ -120,15 +121,21 @@ pub async fn query_link_by_alias(
         .transpose()
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct LinkItem {
+    pub alias: String,
+    pub url: String,
+}
+
 /// List user's links
-#[tracing::instrument(name = "services::query_link_by_alias", skip(pool))]
+#[tracing::instrument(name = "services::query_links_by_user", skip(pool))]
 pub async fn query_links_by_user(
     user: &User,
     pool: &PgPool,
-) -> Result<Vec<CachedLink>, ServiceError> {
+) -> Result<Vec<LinkItem>, ServiceError> {
     let rec_vec = sqlx::query!(
         r#"
-        SELECT id, alias, url, created_at
+        SELECT alias, url
         FROM links_main
         WHERE user_id = $1
         ORDER BY created_at DESC
@@ -139,10 +146,10 @@ pub async fn query_links_by_user(
     .await
     .map_err(ServiceError::DatabaseError)?;
 
-    let links: Vec<CachedLink> = rec_vec
+    let links = rec_vec
         .into_iter()
-        .map(|rec| CachedLink {
-            id: rec.id,
+        .map(|rec| LinkItem {
+            alias: rec.alias.unwrap_or_default(),
             url: rec.url,
         })
         .collect();

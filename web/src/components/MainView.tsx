@@ -1,71 +1,81 @@
 import { TextField, Box, IconButton, Button } from "@radix-ui/themes";
 import { Link2Icon, DotsHorizontalIcon, ClipboardIcon, EraserIcon, PaperPlaneIcon, ReloadIcon } from "@radix-ui/react-icons"
 
-import { Ev, type AppState } from "../model";
-import type { Dispatch } from "../controller";
 import React from "react";
+import { postJson } from "../api";
+import { clipboardCopy } from "../util";
 
-type Button =
-  | { type: "submit"; loading?: boolean }
-  | { type: "retry"; loading?: boolean }
-  | { type: "clear"; loading?: boolean }
-  | { type: "copy"; }
-
-/**
- * Derives set of buttons to render from the app state.
- * @param state Current app state
- * @returns Buttons to render, in display order
- */
-function getButtonsByState(state: AppState): Button[] {
-  switch (state.result.kind) {
-    case "none":
-      return [
-        { type: "submit" }
-      ];
-
-    case "inflight":
-      return [
-        { type: "submit", loading: true },
-      ];
-
-    case "ok":
-      return [
-        { type: "copy" },
-        { type: "clear" },
-      ];
-
-    case "err":
-      return [
-        { type: "retry" },
-        { type: "clear" },
-      ];
-  }
+type ShortenRequest = {
+  url: string;
+  name?: string;
 }
 
-export function MainView({ state, dispatch }: { state: AppState, dispatch: Dispatch }) {
+type ShortenResponse = {
+  alias: string;
+}
+
+type State = "idle" | "ok" | "err";
+
+export function MainView() {
 
   const [userUrl, setUserUrl] = React.useState("");
-  const [urlName, setUrlName] = React.useState("");
+  const [urlName, setUrlName] = React.useState<string | undefined>(undefined);
+  const [result, setResult] = React.useState("");
   const [showOptions, setShowOptions] = React.useState(false);
+  const [state, setState] = React.useState<State>("idle");
 
-  const isReadOnly = state.result.kind === "ok" || state.result.kind === "inflight";
+  const [waiting, setWaiting] = React.useState(false);
 
+  const clearState = () => {
+    setUserUrl("");
+    setUrlName(undefined);
+    setResult("");
+    setShowOptions(false);
+    setState("idle");
+  };
+
+  const submit = async () => {
+    const ac = new AbortController();
+    const timeoutId = setTimeout(() => ac.abort(), 5_000);
+    try {
+      setWaiting(true);
+
+      const body = { url: userUrl, name: urlName } as ShortenRequest;
+      const res = await postJson<ShortenRequest, ShortenResponse>("/api/shorten", body, ac.signal);
+      const shortUrl = `${window.location.origin}/r/${res.alias}`;
+      setResult(shortUrl);
+      setState("ok");
+    } catch (err) {
+      setState("err");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        console.log("Timeout error");
+      } else {
+        const errMsg = err instanceof Error ? err.message : "Unknown error";
+        console.log(`Error: ${errMsg}`);
+      }
+    } finally {
+      setWaiting(false);
+      clearTimeout(timeoutId);
+    }
+  };
+
+  const inputStatus = state === "idle" ? "" : state === "ok" ? "ok" : "err";
+  const firstButtonColor = state === "idle" ? "green" : state === "err" ? "green" : "indigo";
+  const readOnly = waiting || state === "ok";
   return (
     <>
-      <Box data-status={state.result.kind} className="inputField">
+      <Box data-status={inputStatus} className="inputField">
         <TextField.Root
-          value={state.result.kind === "ok" ? state.result.shortUrl : userUrl}
-          readOnly={isReadOnly}
-          data-state={state.result.kind}
+          value={state === "ok" ? result : userUrl}
+          readOnly={readOnly}
           style={{ width: "40rem", }}
-          onChange={(e) => setUserUrl(e.target.value)
+          onChange={(ev) => setUserUrl(ev.target.value)
           }
         >
           <TextField.Slot><Link2Icon /></TextField.Slot>
           <TextField.Slot>
-            <IconButton disabled={isReadOnly} variant="ghost" onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
+            <IconButton disabled={readOnly} variant="ghost" onClick={() => {
+              setUrlName("");
               setShowOptions(!showOptions);
             }}>
               <DotsHorizontalIcon />
@@ -77,60 +87,45 @@ export function MainView({ state, dispatch }: { state: AppState, dispatch: Dispa
             <TextField.Root
               placeholder="Pick a short name for your URL"
               value={urlName}
-              onChange={(e) => setUrlName(e.target.value)}
+              onChange={(ev) => setUrlName(ev.target.value)}
             />
           </Box>
         )}
       </Box>
-      <>
-        {getButtonsByState(state).map((b) => {
-          const key = b.type;
-
-          switch (b.type) {
-            case "submit":
-              return (
-                <Button key={key} onClick={() => {
-                  setShowOptions(false);
-                  dispatch(Ev.submit(userUrl, urlName));
-                }} loading={b.loading} color="green">
-                  <PaperPlaneIcon />
-                </Button>
-              );
-
-            case "retry":
-              return (
-                <Button key={key} onClick={() => {
-                  setShowOptions(false);
-                  dispatch(Ev.submit(userUrl, urlName));
-                }} loading={b.loading}>
-                  <ReloadIcon />
-                </Button>
-              );
-
-            case "clear":
-              return (
-                <Button key={key} onClick={() => {
-                  setUserUrl("");
-                  setUrlName("");
-                  setShowOptions(false);
-
-                  dispatch(Ev.clear());
-                }} loading={b.loading} color="red">
-                  <EraserIcon />
-                </Button>
-              );
-
-            case "copy":
-              return (
-                <Button key={key} onClick={() => {
-                  dispatch(Ev.copy());
-                }}>
-                  <ClipboardIcon />
-                </Button>
-              );
+      <Box>
+        <Button color={firstButtonColor} loading={waiting} onClick={async () => {
+          switch (state) {
+            case "idle": {
+              await submit();
+              setShowOptions(false);
+              break;
+            }
+            case "ok": {
+              await clipboardCopy(result);
+              break;
+            }
+            case "err": {
+              await submit();
+              setShowOptions(false);
+              break;
+            }
           }
-        })}
-      </>
+        }}>
+          {state === "idle" ? (
+            <PaperPlaneIcon />
+          ) : state === "err" ? (
+            <ReloadIcon />
+          ) : (
+            <EraserIcon />
+          )}
+        </Button>
+
+        <Button color="red" disabled={!(userUrl || urlName || result) || waiting} onClick={() => {
+          clearState();
+        }}>
+          <ClipboardIcon />
+        </Button>
+      </Box>
     </>
   );
 }
