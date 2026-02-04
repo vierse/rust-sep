@@ -46,6 +46,7 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/auth", auth_api)
         .nest("/user", user_api)
         .route("/shorten", post(handlers::shorten))
+        .route("/recent", get(handlers::recently_added_links))
         .layer(middleware::from_fn(clear_sid_mw));
 
     Router::new()
