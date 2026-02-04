@@ -128,3 +128,14 @@ pub async fn shorten(
         }
     }
 }
+
+pub async fn recently_added_links(State(app): State<AppState>) -> Result<Response, ApiError> {
+    let links = services::recently_added_links(10, &app.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "service error");
+            ApiError::internal()
+        })?;
+
+    Ok((StatusCode::OK, Json(links)).into_response())
+}

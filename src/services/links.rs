@@ -92,10 +92,10 @@ pub async fn create_link_with_alias(
     Ok(rec.is_some())
 }
 
-/// Query link from database
+/// Query url from database
 ///
 /// Returns Ok(None) if the alias does not exist
-#[tracing::instrument(name = "services::query_link_by_alias", skip(pool))]
+#[tracing::instrument(name = "services::query_url_by_alias", skip(pool))]
 pub async fn query_url_by_alias(
     alias: &str,
     pool: &PgPool,
@@ -124,7 +124,7 @@ pub struct LinkItem {
 }
 
 /// List user's links
-#[tracing::instrument(name = "services::query_links_by_user", skip(pool))]
+#[tracing::instrument(name = "services::query_links_by_user_id", skip(pool))]
 pub async fn query_links_by_user_id(
     user_id: &UserId,
     pool: &PgPool,
@@ -154,6 +154,7 @@ pub async fn query_links_by_user_id(
 }
 
 /// Remove user's link
+#[tracing::instrument(name = "services::remove_user_link", skip(pool))]
 pub async fn remove_user_link(
     user_id: &UserId,
     alias: &str,
@@ -173,4 +174,22 @@ pub async fn remove_user_link(
     .map_err(ServiceError::DatabaseError)?;
 
     Ok(())
+}
+
+#[tracing::instrument(name = "app::recently_added_links", skip(pool))]
+pub async fn recently_added_links(limit: i64, pool: &PgPool) -> Result<Vec<String>, ServiceError> {
+    let recs = sqlx::query!(
+        r#"
+        SELECT url
+        FROM links_main
+        ORDER BY id DESC
+        LIMIT $1
+        "#,
+        limit
+    )
+    .fetch_all(pool)
+    .await
+    .context("DB select recent links query failed")?;
+
+    Ok(recs.into_iter().map(|rec| rec.url).collect())
 }
