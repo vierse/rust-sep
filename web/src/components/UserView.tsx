@@ -19,12 +19,21 @@ export function UserView() {
   const [waiting, setWaiting] = React.useState(false);
   const [user, setUser] = React.useState("");
 
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const user = await getJson<AuthResponse>("/api/auth/me");
+        setUser(user.username);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : "Session restore failed";
+        console.log(errMsg)
+      }
+    })();
+  }, []);
   const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
 
     setWaiting(true);
-    const ac = new AbortController();
-    const timeoutId = setTimeout(() => ac.abort(), 5_000);
 
     try {
       const form = ev.currentTarget;
@@ -40,8 +49,8 @@ export function UserView() {
 
       const user =
         action === "register"
-          ? await postJson<AuthRequest, AuthResponse>("/api/auth/register", body, ac.signal)
-          : await postJson<AuthRequest, AuthResponse>("/api/auth/login", body, ac.signal);
+          ? await postJson<AuthRequest, AuthResponse>("/api/auth/register", body)
+          : await postJson<AuthRequest, AuthResponse>("/api/auth/login", body);
 
       setUser(user.username);
       setOpen(false);
@@ -51,7 +60,6 @@ export function UserView() {
       console.log(errMsg)
     } finally {
       setWaiting(false);
-      clearTimeout(timeoutId);
     }
   };
 
@@ -127,8 +135,7 @@ function LinksTable() {
   React.useEffect(() => {
     (async () => {
       try {
-        const ac = new AbortController();
-        const data = await getJson<LinkItem[]>("/api/user/list", ac.signal);
+        const data = await getJson<LinkItem[]>("/api/user/list");
         setLinks(data);
       } catch (err) {
         console.error(err);
