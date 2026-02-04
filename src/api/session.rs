@@ -26,10 +26,7 @@ impl SessionId {
 
 impl Sessions {
     pub fn new() -> Self {
-        Self {
-            sid_to_uid: Arc::new(DashMap::new()),
-            uid_to_user: Arc::new(DashMap::new()),
-        }
+        Self::default()
     }
 
     pub fn new_session(&self, user: User) -> SessionId {
@@ -60,6 +57,15 @@ impl Sessions {
             Ok(*user_id)
         } else {
             Err(SessionError::NotExists)
+        }
+    }
+}
+
+impl Default for Sessions {
+    fn default() -> Self {
+        Self {
+            sid_to_uid: Arc::new(DashMap::new()),
+            uid_to_user: Arc::new(DashMap::new()),
         }
     }
 }

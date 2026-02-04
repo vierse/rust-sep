@@ -17,10 +17,7 @@ impl Scheduler {
     pub const SECONDS_IN_DAY: u64 = 24 * 60 * 60;
 
     pub fn new() -> Self {
-        Self {
-            cancel_token: CancellationToken::new(),
-            tasks: JoinSet::new(),
-        }
+        Self::default()
     }
 
     /// Spawns a background task, immediately running it at provided interval
@@ -88,6 +85,15 @@ impl Scheduler {
                     tracing::error!("Scheduler timed out when shutting down");
                 }
             }
+        }
+    }
+}
+
+impl Default for Scheduler {
+    fn default() -> Self {
+        Self {
+            cancel_token: CancellationToken::new(),
+            tasks: JoinSet::new(),
         }
     }
 }
