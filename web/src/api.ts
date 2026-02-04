@@ -1,27 +1,59 @@
-/**
- * Sends a request to the backend to shorten a URL
- * @param userUrl user-provided URL
- * @param abort abort signal to cancel the request
- * @param urlName optional URL name
- * @returns Fully qualified shortened URL
- */
-export async function shorten(userUrl: string, abort: AbortSignal, urlName?: string): Promise<string> {
+type ApiErrorBody = { reason: string };
 
-    const body = {
-        url: userUrl,
-        ...(urlName && { name: urlName }),
-    };
+export async function postJson<RequestType, ResponseType>(
+  path: string,
+  body: RequestType,
+  abort: AbortSignal
+): Promise<ResponseType> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify(body),
+    signal: abort,
+  });
 
-    const result = await fetch("/api/shorten", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: abort,
-    });
-    if (!result.ok) throw new Error(`Request error (${result.status})`);
+  if (!res.ok) {
+    let reason = `Request error (${res.status})`;
 
-    const data = (await result.json()) as { alias: string };
-    if (!data.alias) throw new Error("Bad response: missing alias");
+    try {
+      const err = (await res.json()) as ApiErrorBody;
+      reason = err.reason;
+    } catch {
+      // ignore
+    }
 
-    return `${window.location.origin}/r/${data.alias}`;
+    throw new Error(reason);
+  }
+  return (await res.json()) as ResponseType;
+}
+
+export async function getJson<ResponseType>(
+  path: string,
+  abort: AbortSignal
+): Promise<ResponseType> {
+  const res = await fetch(path, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json"
+    },
+    signal: abort,
+  });
+
+  if (!res.ok) {
+    let reason = `Request error (${res.status})`;
+
+    try {
+      const err = (await res.json()) as ApiErrorBody;
+      reason = err.reason;
+    } catch {
+      // ignore
+    }
+
+    throw new Error(reason);
+  }
+
+  return (await res.json()) as ResponseType;
 }
