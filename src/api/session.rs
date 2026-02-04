@@ -12,7 +12,8 @@ pub enum SessionError {
 }
 
 pub struct Sessions {
-    inner: Arc<DashMap<String, User>>,
+    sid_to_uid: Arc<DashMap<String, UserId>>,
+    uid_to_user: Arc<DashMap<UserId, User>>,
 }
 
 pub struct SessionId(pub String);
@@ -26,7 +27,8 @@ impl SessionId {
 impl Sessions {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(DashMap::new()),
+            sid_to_uid: Arc::new(DashMap::new()),
+            uid_to_user: Arc::new(DashMap::new()),
         }
     }
 
@@ -37,16 +39,25 @@ impl Sessions {
         OsRng.fill_bytes(&mut bytes);
 
         let session_id = Base64.encode(bytes);
-        self.inner.insert(session_id.clone(), user);
+        self.sid_to_uid.insert(session_id.clone(), user.id());
+        self.uid_to_user.insert(user.id(), user);
 
         SessionId(session_id)
     }
 
-    pub fn get_user_id(&self, session_id: &str) -> Result<UserId, SessionError> {
-        if let Some(entry) = self.inner.get(session_id) {
+    pub fn get_user(&self, user_id: UserId) -> Result<User, SessionError> {
+        if let Some(entry) = self.uid_to_user.get(&user_id) {
             let user = entry.value();
+            Ok(user.clone())
+        } else {
+            Err(SessionError::NotExists)
+        }
+    }
 
-            Ok(user.id())
+    pub fn get_user_id(&self, session_id: &str) -> Result<UserId, SessionError> {
+        if let Some(entry) = self.sid_to_uid.get(session_id) {
+            let user_id = entry.value();
+            Ok(*user_id)
         } else {
             Err(SessionError::NotExists)
         }

@@ -1,53 +1,66 @@
 use axum::{
     extract::FromRequestParts,
-    http::{HeaderMap, StatusCode, header, request::Parts},
+    http::{HeaderMap, HeaderValue, StatusCode, header, request::Parts},
+    response::{IntoResponse, Response},
 };
 use cookie::Cookie;
 
-use crate::{app::AppState, domain::User};
+use crate::{app::AppState, domain::UserId};
 
-pub struct RequireUser(pub User);
+pub struct RequireUser(pub UserId);
 
 impl FromRequestParts<AppState> for RequireUser {
-    type Rejection = (StatusCode, &'static str);
+    type Rejection = Response;
 
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let session_id =
-            parse_session_id(&parts.headers).ok_or((StatusCode::UNAUTHORIZED, "Not logged in"))?;
+        let sid = parse_session_id(&parts.headers).ok_or_else(|| {
+            let mut res = (StatusCode::UNAUTHORIZED, "Not logged in").into_response();
+            res.headers_mut().append(
+                header::SET_COOKIE,
+                HeaderValue::from_static("sid=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"),
+            );
+            res
+        })?;
 
-        let user_id = state
-            .sessions
-            .get_user_id(&session_id)
-            .map_err(|_| (StatusCode::UNAUTHORIZED, "Not logged in"))?;
+        let user_id = state.sessions.get_user_id(&sid).map_err(|_| {
+            let mut res = (StatusCode::UNAUTHORIZED, "Not logged in").into_response();
+            res.headers_mut().append(
+                header::SET_COOKIE,
+                HeaderValue::from_static("sid=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"),
+            );
+            res
+        })?;
 
-        Ok(RequireUser(User::new(user_id)))
+        Ok(RequireUser(user_id))
     }
 }
 
-pub struct MaybeUser(pub Option<User>);
+#[derive(Clone, Copy)]
+pub struct ClearSid;
+
+pub struct MaybeUser(pub Option<UserId>);
 
 impl FromRequestParts<AppState> for MaybeUser {
-    type Rejection = (StatusCode, &'static str);
+    type Rejection = std::convert::Infallible;
 
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let sid = parse_session_id(&parts.headers);
+        let Some(sid) = parse_session_id(&parts.headers) else {
+            return Ok(MaybeUser(None));
+        };
 
-        if let Some(session_id) = sid {
-            let user_id = state
-                .sessions
-                .get_user_id(&session_id)
-                .map_err(|_| (StatusCode::UNAUTHORIZED, "Not logged in"))?;
-
-            return Ok(MaybeUser(Some(User::new(user_id))));
+        match state.sessions.get_user_id(&sid) {
+            Ok(user_id) => Ok(MaybeUser(Some(user_id))),
+            Err(_) => {
+                parts.extensions.insert(ClearSid);
+                Ok(MaybeUser(None))
+            }
         }
-
-        Ok(MaybeUser(None))
     }
 }
 

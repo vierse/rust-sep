@@ -21,7 +21,7 @@ pub async fn redirect(
     let link_opt = app
         .cache
         .try_get_with(key.clone(), async move {
-            services::query_link_by_alias(&key, &pool).await
+            services::query_url_by_alias(&key, &pool).await
         })
         .await
         .map_err(|e| {

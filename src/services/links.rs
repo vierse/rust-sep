@@ -5,7 +5,7 @@ use sqlx::PgPool;
 
 use crate::{
     app::CachedLink,
-    domain::{Url, User, UserId},
+    domain::{Url, UserId},
     services::ServiceError,
 };
 
@@ -15,10 +15,8 @@ pub async fn create_link(
     url: &str,
     generator: &Sqids,
     pool: &PgPool,
-    user: Option<&User>,
+    user_id: Option<UserId>,
 ) -> Result<String, ServiceError> {
-    let user_id: Option<UserId> = user.map(|u| u.id());
-
     let mut tx = pool.begin().await.map_err(ServiceError::DatabaseError)?;
     // Insert the url into database to get a unique id
     let rec = sqlx::query!(
@@ -74,10 +72,8 @@ pub async fn create_link_with_alias(
     url: &str,
     alias: &str,
     pool: &PgPool,
-    user: Option<&User>,
+    user_id: Option<UserId>,
 ) -> Result<bool, ServiceError> {
-    let user_id: Option<UserId> = user.map(|u| u.id());
-
     let rec = sqlx::query!(
         r#"
         INSERT INTO links_main (alias, url, user_id)
@@ -100,7 +96,7 @@ pub async fn create_link_with_alias(
 ///
 /// Returns Ok(None) if the alias does not exist
 #[tracing::instrument(name = "services::query_link_by_alias", skip(pool))]
-pub async fn query_link_by_alias(
+pub async fn query_url_by_alias(
     alias: &str,
     pool: &PgPool,
 ) -> Result<Option<CachedLink>, ServiceError> {
@@ -129,8 +125,8 @@ pub struct LinkItem {
 
 /// List user's links
 #[tracing::instrument(name = "services::query_links_by_user", skip(pool))]
-pub async fn query_links_by_user(
-    user: &User,
+pub async fn query_links_by_user_id(
+    user_id: &UserId,
     pool: &PgPool,
 ) -> Result<Vec<LinkItem>, ServiceError> {
     let rec_vec = sqlx::query!(
@@ -140,7 +136,7 @@ pub async fn query_links_by_user(
         WHERE user_id = $1
         ORDER BY created_at DESC
         "#,
-        user.id()
+        user_id
     )
     .fetch_all(pool)
     .await
