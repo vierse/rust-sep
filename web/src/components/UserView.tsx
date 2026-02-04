@@ -1,8 +1,8 @@
 import { Button, Dialog, Flex, IconButton, Inset, Table, Text, TextField } from "@radix-ui/themes";
-import { ClipboardIcon, PersonIcon } from "@radix-ui/react-icons";
+import { ClipboardIcon, Cross1Icon, PersonIcon } from "@radix-ui/react-icons";
 
 import React from "react";
-import { getJson, postJson } from "../api";
+import { deleteReq, getJson, postJson } from "../api";
 import { clipboardCopy } from "../util";
 
 type AuthRequest = {
@@ -122,6 +122,8 @@ function LinksTable() {
   const [links, setLinks] = React.useState<LinkItem[]>([]);
   const [loading, setLoading] = React.useState(true);
 
+  const [removingLink, setRemovingLink] = React.useState(false);
+
   React.useEffect(() => {
     (async () => {
       try {
@@ -139,6 +141,18 @@ function LinksTable() {
   const copyLink = async (link: LinkItem) => {
     const shortUrl = `${window.location.origin}/r/${link.alias}`;
     clipboardCopy(shortUrl);
+  };
+
+  const removeLink = async (link: LinkItem) => {
+    setRemovingLink(true);
+    try {
+      await deleteReq(`/api/user/link/${encodeURIComponent(link.alias)}`);
+      setLinks((xs) => xs.filter((l) => l.alias !== link.alias));
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setRemovingLink(false);
+    }
   };
 
   return (
@@ -172,6 +186,10 @@ function LinksTable() {
                       onClick={() => copyLink(link)}
                     >
                       <ClipboardIcon />
+                    </IconButton>
+
+                    <IconButton disabled={removingLink} variant="ghost" onClick={() => removeLink(link)}>
+                      <Cross1Icon />
                     </IconButton>
                   </Flex>
                 </Table.Cell>

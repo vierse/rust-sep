@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     api::session::SessionError,
     domain::{AliasParseError, UrlParseError},
+    services::ServiceError,
 };
 
 pub struct ApiError {

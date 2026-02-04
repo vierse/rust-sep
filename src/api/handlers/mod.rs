@@ -1,11 +1,9 @@
 mod auth;
-mod redirect;
-mod shorten;
-mod user_list;
+mod general;
+mod user;
 
 pub(crate) use auth::{authenticate_session, authenticate_user, create_user};
-pub(crate) use redirect::redirect;
-pub(crate) use shorten::shorten;
-pub(crate) use user_list::list_links;
+pub(crate) use general::{redirect, shorten};
+pub(crate) use user::{list_user_links, remove_user_link};
 
-pub use shorten::ShortenResponse;
+pub use general::ShortenResponse;

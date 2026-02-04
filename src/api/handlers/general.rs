@@ -1,15 +1,15 @@
 use axum::{
     Json,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
     api::{auth::MaybeUser, error::ApiError},
     app::AppState,
-    domain::{Alias, Url},
+    domain::{Alias, MAX_ALIAS_LENGTH, Url},
     services,
 };
 
@@ -29,6 +29,41 @@ impl IntoResponse for ShortenResponse {
     fn into_response(self) -> Response {
         (StatusCode::CREATED, Json(self)).into_response()
     }
+}
+
+pub async fn redirect(
+    State(app): State<AppState>,
+    Path(alias): Path<String>,
+) -> Result<Redirect, ApiError> {
+    if alias.len() > MAX_ALIAS_LENGTH {
+        tracing::error!("maximum alias length exceeded");
+        return Err(ApiError::internal());
+    }
+
+    let key = alias.clone();
+    let pool = app.pool.clone();
+
+    // Try to get the URL from cache else query DB
+    let link_opt = app
+        .cache
+        .try_get_with(key.clone(), async move {
+            services::query_url_by_alias(&key, &pool).await
+        })
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "failed to query or load url from cache");
+            ApiError::internal()
+        })?;
+
+    let link = link_opt.ok_or_else(|| {
+        tracing::debug!("alias not found: {alias}");
+        ApiError::not_found()
+    })?;
+
+    // Update metrics
+    app.metrics.record_hit(link.id);
+
+    Ok(Redirect::permanent(&link.url))
 }
 
 pub async fn shorten(
@@ -65,7 +100,7 @@ pub async fn shorten(
                 services::create_link_with_alias(url.as_str(), alias.as_str(), &app.pool, user_id)
                     .await
                     .map_err(|e| {
-                        tracing::error!(error = %e, "app error");
+                        tracing::error!(error = %e, "service error");
                         ApiError::internal()
                     })?;
 
@@ -85,7 +120,7 @@ pub async fn shorten(
             let alias = services::create_link(url.as_str(), &app.sqids, &app.pool, user_id)
                 .await
                 .map_err(|e| {
-                    tracing::error!(error = %e, "app error");
+                    tracing::error!(error = %e, "service error");
                     ApiError::internal()
                 })?;
 

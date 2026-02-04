@@ -4,7 +4,7 @@ use axum::{
     http::{HeaderValue, Request, header},
     middleware::{self, Next},
     response::Response,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -38,7 +38,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/login", post(handlers::authenticate_user))
         .route("/register", post(handlers::create_user));
 
-    let user_api = Router::new().route("/list", get(handlers::list_links));
+    let user_api = Router::new()
+        .route("/list", get(handlers::list_user_links))
+        .route("/link/{alias}", delete(handlers::remove_user_link));
 
     let api = Router::new()
         .nest("/auth", auth_api)

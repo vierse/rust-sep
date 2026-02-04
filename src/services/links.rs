@@ -152,3 +152,25 @@ pub async fn query_links_by_user_id(
 
     Ok(links)
 }
+
+/// Remove user's link
+pub async fn remove_user_link(
+    user_id: &UserId,
+    alias: &str,
+    pool: &PgPool,
+) -> Result<(), ServiceError> {
+    sqlx::query!(
+        r#"
+        DELETE FROM links_main
+        WHERE user_id = $1
+          AND alias = $2
+        "#,
+        user_id,
+        alias
+    )
+    .execute(pool)
+    .await
+    .map_err(ServiceError::DatabaseError)?;
+
+    Ok(())
+}

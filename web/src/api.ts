@@ -3,7 +3,7 @@ type ApiErrorBody = { reason: string };
 export async function postJson<RequestType, ResponseType>(
   path: string,
   body: RequestType,
-  abort: AbortSignal
+  signal?: AbortSignal
 ): Promise<ResponseType> {
   const res = await fetch(path, {
     method: "POST",
@@ -12,7 +12,7 @@ export async function postJson<RequestType, ResponseType>(
       "Accept": "application/json",
     },
     body: JSON.stringify(body),
-    signal: abort,
+    ...(signal ? { signal } : {}),
   });
 
   if (!res.ok) {
@@ -20,7 +20,7 @@ export async function postJson<RequestType, ResponseType>(
 
     try {
       const err = (await res.json()) as ApiErrorBody;
-      reason = err.reason;
+      if (err?.reason) reason = err.reason;
     } catch {
       // ignore
     }
@@ -32,14 +32,14 @@ export async function postJson<RequestType, ResponseType>(
 
 export async function getJson<ResponseType>(
   path: string,
-  abort: AbortSignal
+  signal?: AbortSignal
 ): Promise<ResponseType> {
   const res = await fetch(path, {
     method: "GET",
     headers: {
       "Accept": "application/json"
     },
-    signal: abort,
+    ...(signal ? { signal } : {}),
   });
 
   if (!res.ok) {
@@ -47,7 +47,7 @@ export async function getJson<ResponseType>(
 
     try {
       const err = (await res.json()) as ApiErrorBody;
-      reason = err.reason;
+      if (err?.reason) reason = err.reason;
     } catch {
       // ignore
     }
@@ -56,4 +56,25 @@ export async function getJson<ResponseType>(
   }
 
   return (await res.json()) as ResponseType;
+}
+
+export async function deleteReq(path: string, signal?: AbortSignal): Promise<void> {
+  const res = await fetch(path, {
+    method: "DELETE",
+    headers: { Accept: "application/json" },
+    ...(signal ? { signal } : {}),
+  });
+
+  if (!res.ok) {
+    let reason = `Request error (${res.status})`;
+
+    try {
+      const err = (await res.json()) as ApiErrorBody;
+      if (err?.reason) reason = err.reason;
+    } catch {
+      // ignore
+    }
+
+    throw new Error(reason);
+  }
 }
