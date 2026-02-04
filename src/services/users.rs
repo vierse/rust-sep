@@ -1,23 +1,23 @@
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use rand_core::OsRng;
 use sqlx::PgPool;
 
-use crate::services::ServiceError;
+use crate::{domain::User, services::ServiceError};
 
 #[tracing::instrument(name = "services::create_user_account", skip_all)]
-pub async fn create_user_account(
+pub async fn create_user(
     username: &str,
     password: &str,
     hasher: &Argon2<'_>,
     pool: &PgPool,
-) -> Result<i64, ServiceError> {
+) -> Result<Option<User>, ServiceError> {
     let salt = SaltString::generate(&mut OsRng);
     let hash = hasher
         .hash_password(password.as_bytes(), &salt)
         .map_err(|_| anyhow!("failed to hash"))?;
 
-    let rec = sqlx::query!(
+    let rec_opt = sqlx::query!(
         r#"
         INSERT INTO users_main (username, password_hash)
         VALUES ($1, $2)
@@ -31,16 +31,16 @@ pub async fn create_user_account(
     .await
     .map_err(ServiceError::DatabaseError)?;
 
-    Ok(rec.unwrap().id)
+    Ok(rec_opt.map(|rec| User::new(rec.id, username.to_string())))
 }
 
 #[tracing::instrument(name = "services::verify_user_password", skip_all)]
-pub async fn verify_user_password(
+pub async fn authenticate_user(
     username: &str,
     password: &str,
     hasher: &Argon2<'_>,
     pool: &PgPool,
-) -> Result<Option<i64>, ServiceError> {
+) -> Result<User, ServiceError> {
     let rec = sqlx::query!(
         r#"
         SELECT id, password_hash
@@ -51,21 +51,18 @@ pub async fn verify_user_password(
     )
     .fetch_optional(pool)
     .await
-    .context("failed to fetch user password hash")?;
+    .map_err(ServiceError::DatabaseError)?;
 
     let Some(rec) = rec else {
-        return Ok(None);
+        return Err(ServiceError::AuthError);
     };
 
-    let parsed_hash = PasswordHash::new(&rec.password_hash)
+    let hash = PasswordHash::new(&rec.password_hash)
         .map_err(|e| anyhow::anyhow!("invalid password hash: {e}"))?;
 
-    if hasher
-        .verify_password(password.as_bytes(), &parsed_hash)
-        .is_ok()
-    {
-        Ok(Some(rec.id))
-    } else {
-        Ok(None)
+    if hasher.verify_password(password.as_bytes(), &hash).is_err() {
+        return Err(ServiceError::AuthError);
     }
+
+    Ok(User::new(rec.id, username.to_string()))
 }

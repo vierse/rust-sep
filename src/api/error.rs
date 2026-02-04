@@ -5,7 +5,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{AliasParseError, UrlParseError};
+use crate::{
+    api::session::SessionError,
+    domain::{AliasParseError, UrlParseError},
+};
 
 pub struct ApiError {
     status_code: StatusCode,
@@ -34,6 +37,14 @@ impl ApiError {
         Self {
             status_code: StatusCode::INTERNAL_SERVER_ERROR,
             reason: "Internal server error",
+        }
+    }
+}
+
+impl From<SessionError> for ApiError {
+    fn from(error: SessionError) -> Self {
+        match error {
+            _ => Self::internal(),
         }
     }
 }
