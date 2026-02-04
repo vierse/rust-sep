@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use anyhow::{Context, Result};
 use sqlx::PgPool;
@@ -15,6 +15,8 @@ pub async fn process_daily_metrics(pool: PgPool, metrics: Arc<Metrics>) -> Resul
     if map.is_empty() {
         return Ok(());
     }
+
+    let start = Instant::now();
 
     // (link_id, hits, last_access) columns
     let mut link_id_col: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
@@ -52,7 +54,9 @@ pub async fn process_daily_metrics(pool: PgPool, metrics: Arc<Metrics>) -> Resul
 
     // Flush the rest
     flush_to_db(&pool, &link_id_col, &hits_col, &last_access_col).await?;
-    tracing::info!("Updated {} entries", entries_updated);
+
+    let elapsed_ms = start.elapsed().as_millis();
+    tracing::info!("Updated {} entries in {} ms", entries_updated, elapsed_ms);
 
     Ok(())
 }
