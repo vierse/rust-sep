@@ -1,12 +1,10 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::{Html, IntoResponse, Redirect},
+    response::{IntoResponse, Redirect},
 };
 
 use crate::app::AppState;
-
-const EXPIRED_LINK_HTML: &str = include_str!("expired_link.html");
 
 pub async fn redirect(State(app): State<AppState>, Path(alias): Path<String>) -> impl IntoResponse {
     match app.get_url(&alias).await {
@@ -18,7 +16,7 @@ pub async fn redirect(State(app): State<AppState>, Path(alias): Path<String>) ->
             }
             crate::app::GetUrlError::LinkExpired => {
                 tracing::info!("redirect to an expired link");
-                (StatusCode::GONE, Html(EXPIRED_LINK_HTML)).into_response()
+                (StatusCode::GONE).into_response()
             }
             crate::app::GetUrlError::HitLogFail(url, error) => {
                 tracing::error!(error = %error, "failed to log url access");
