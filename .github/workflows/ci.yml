@@ -10,7 +10,7 @@ on:
 env: 
   CARGO_TERM_COLOR: always
   DATABASE_URL: postgres://app_user:app_password@localhost:5432/postgres
-  SQLX_OFFLINE: true
+  SQLX_OFFLINE: false
 
 jobs:
   build:
@@ -45,6 +45,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85.0
         with:
           components: rustfmt, clippy
+      - name: install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features postgres --locked
+      - name: SQL migrations
+        run: sqlx migrate run
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy
