@@ -100,10 +100,13 @@ pub async fn query_url_by_alias(
     alias: &str,
     pool: &PgPool,
 ) -> Result<Option<CachedLink>, ServiceError> {
-    let rec_opt = sqlx::query!(r#"SELECT id, url FROM links_main WHERE alias = $1"#, alias)
-        .fetch_optional(pool)
-        .await
-        .map_err(ServiceError::DatabaseError)?;
+    let rec_opt = sqlx::query!(
+        r#"SELECT id, url, last_seen FROM links_main WHERE alias = $1"#,
+        alias
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(ServiceError::DatabaseError)?;
 
     rec_opt
         .map(|rec| {
@@ -112,7 +115,11 @@ pub async fn query_url_by_alias(
                 .map_err(ServiceError::Other)?
                 .into_string();
 
-            Ok(CachedLink { id: rec.id, url })
+            Ok(CachedLink {
+                id: rec.id,
+                url,
+                last_seen: rec.last_seen,
+            })
         })
         .transpose()
 }

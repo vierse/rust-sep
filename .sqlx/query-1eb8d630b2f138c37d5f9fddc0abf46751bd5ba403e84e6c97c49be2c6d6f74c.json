@@ -1,18 +1,6 @@
 {
   "db_name": "PostgreSQL",
-<<<<<<< HEAD:.sqlx/query-e017e2412fab1873459d9aafa5feb325049d2fca449c7e1ff6848fb44afdabb0.json
-<<<<<<< HEAD:.sqlx/query-1cbb80866154182c070a9ecd81c98f2aa5ee718399497fad5ff2c50e35d82030.json
-<<<<<<<< HEAD:.sqlx/query-736d7034bfdc47c2dcfd325d1be1bdcb3cb5c0bcf6b983ace14a1fa29c2bbe32.json
-  "query": "\n            INSERT INTO links (url, expires_at)\n            VALUES ($1, $2)\n            RETURNING id\n            ",
-========
-  "query": "\n            INSERT INTO links_main (url)\n            VALUES ($1)\n            RETURNING id\n            ",
->>>>>>>> 4020624 (DB cleanup, implement redirect cache #14):.sqlx/query-1cbb80866154182c070a9ecd81c98f2aa5ee718399497fad5ff2c50e35d82030.json
-=======
-  "query": "\n        INSERT INTO links_main (url)\n        VALUES ($1)\n        RETURNING id\n        ",
->>>>>>> b50a8ea (split AppState impl into services module):.sqlx/query-e017e2412fab1873459d9aafa5feb325049d2fca449c7e1ff6848fb44afdabb0.json
-=======
   "query": "\n        INSERT INTO links_main (url, user_id)\n        VALUES ($1, $2)\n        RETURNING id\n        ",
->>>>>>> f33d6dd (added auth to api endpoints, list links by user):.sqlx/query-1eb8d630b2f138c37d5f9fddc0abf46751bd5ba403e84e6c97c49be2c6d6f74c.json
   "describe": {
     "columns": [
       {
@@ -24,28 +12,12 @@
     "parameters": {
       "Left": [
         "Text",
-<<<<<<< HEAD:.sqlx/query-e017e2412fab1873459d9aafa5feb325049d2fca449c7e1ff6848fb44afdabb0.json
-        "Timestamptz"
-=======
         "Int8"
->>>>>>> f33d6dd (added auth to api endpoints, list links by user):.sqlx/query-1eb8d630b2f138c37d5f9fddc0abf46751bd5ba403e84e6c97c49be2c6d6f74c.json
       ]
     },
     "nullable": [
       false
     ]
   },
-<<<<<<< HEAD:.sqlx/query-e017e2412fab1873459d9aafa5feb325049d2fca449c7e1ff6848fb44afdabb0.json
-<<<<<<< HEAD:.sqlx/query-1cbb80866154182c070a9ecd81c98f2aa5ee718399497fad5ff2c50e35d82030.json
-<<<<<<<< HEAD:.sqlx/query-736d7034bfdc47c2dcfd325d1be1bdcb3cb5c0bcf6b983ace14a1fa29c2bbe32.json
-  "hash": "736d7034bfdc47c2dcfd325d1be1bdcb3cb5c0bcf6b983ace14a1fa29c2bbe32"
-========
-  "hash": "1cbb80866154182c070a9ecd81c98f2aa5ee718399497fad5ff2c50e35d82030"
->>>>>>>> 4020624 (DB cleanup, implement redirect cache #14):.sqlx/query-1cbb80866154182c070a9ecd81c98f2aa5ee718399497fad5ff2c50e35d82030.json
-=======
-  "hash": "e017e2412fab1873459d9aafa5feb325049d2fca449c7e1ff6848fb44afdabb0"
->>>>>>> b50a8ea (split AppState impl into services module):.sqlx/query-e017e2412fab1873459d9aafa5feb325049d2fca449c7e1ff6848fb44afdabb0.json
-=======
   "hash": "1eb8d630b2f138c37d5f9fddc0abf46751bd5ba403e84e6c97c49be2c6d6f74c"
->>>>>>> f33d6dd (added auth to api endpoints, list links by user):.sqlx/query-1eb8d630b2f138c37d5f9fddc0abf46751bd5ba403e84e6c97c49be2c6d6f74c.json
 }
