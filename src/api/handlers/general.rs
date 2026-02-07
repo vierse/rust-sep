@@ -1,3 +1,4 @@
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
     Json,
     extract::{Path, State},
@@ -21,6 +22,7 @@ const EXPIRY_DAYS: i64 = 30;
 pub struct ShortenRequest {
     pub url: String,
     pub name: Option<String>,
+    pub password: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -34,9 +36,15 @@ impl IntoResponse for ShortenResponse {
     }
 }
 
+#[derive(Deserialize)]
+pub struct RedirectQuery {
+    pub password: Option<String>,
+}
+
 pub async fn redirect(
     State(app): State<AppState>,
     Path(alias): Path<String>,
+    axum::extract::Query(query): axum::extract::Query<RedirectQuery>,
 ) -> Result<Redirect, ApiError> {
     if alias.len() > MAX_ALIAS_LENGTH {
         tracing::error!("maximum alias length exceeded");
@@ -69,6 +77,24 @@ pub async fn redirect(
     }
     // TODO: mark the expired link for cleanup
 
+    // Check password if the link is protected
+    if let Some(ref stored_hash) = link.password_hash {
+        let provided = query.password.as_deref().unwrap_or("");
+        let parsed_hash = PasswordHash::new(stored_hash).map_err(|e| {
+            tracing::error!(error = %e, "failed to parse stored password hash");
+            ApiError::internal()
+        })?;
+        if Argon2::default()
+            .verify_password(provided.as_bytes(), &parsed_hash)
+            .is_err()
+        {
+            return Err(ApiError::public(
+                StatusCode::UNAUTHORIZED,
+                "Password required",
+            ));
+        }
+    }
+
     // Update metrics
     app.metrics.record_hit(link.id);
 
@@ -78,12 +104,18 @@ pub async fn redirect(
 pub async fn shorten(
     MaybeUser(user_id): MaybeUser,
     State(app): State<AppState>,
-    Json(ShortenRequest { url, name }): Json<ShortenRequest>,
+    Json(ShortenRequest {
+        url,
+        name,
+        password,
+    }): Json<ShortenRequest>,
 ) -> Result<ShortenResponse, ApiError> {
     let url = Url::parse(&url).map_err(|e| {
         tracing::debug!(error = %e, "url parse error");
         ApiError::from(e)
     })?;
+
+    let password_ref = password.as_deref();
 
     match name {
         // If request contains an alias, validate and save it
@@ -93,13 +125,19 @@ pub async fn shorten(
                 ApiError::from(e)
             })?;
 
-            let result =
-                services::create_link_with_alias(url.as_str(), alias.as_str(), &app.pool, user_id)
-                    .await
-                    .map_err(|e| {
-                        tracing::error!(error = %e, "service error");
-                        ApiError::internal()
-                    })?;
+            let result = services::create_link_with_alias(
+                url.as_str(),
+                alias.as_str(),
+                &app.pool,
+                user_id,
+                password_ref,
+                &app.hasher,
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "service error");
+                ApiError::internal()
+            })?;
 
             if !result {
                 tracing::debug!(cause = %alias.as_str(), "alias already taken");
@@ -114,12 +152,19 @@ pub async fn shorten(
 
         // If request does not contain an alias, generate a new one
         None => {
-            let alias = services::create_link(url.as_str(), &app.sqids, &app.pool, user_id)
-                .await
-                .map_err(|e| {
-                    tracing::error!(error = %e, "service error");
-                    ApiError::internal()
-                })?;
+            let alias = services::create_link(
+                url.as_str(),
+                &app.sqids,
+                &app.pool,
+                user_id,
+                password_ref,
+                &app.hasher,
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "service error");
+                ApiError::internal()
+            })?;
 
             Ok(ShortenResponse { alias })
         }

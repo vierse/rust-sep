@@ -23,6 +23,7 @@ pub struct CachedLink {
     pub id: i64,
     pub url: String,
     pub last_seen: Date,
+    pub password_hash: Option<String>,
 }
 
 #[derive(Clone)]

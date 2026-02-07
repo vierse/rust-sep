@@ -238,3 +238,66 @@ async fn redirect_expired_link(pool: PgPool) {
         "Expected expired link to return 410 Gone"
     );
 }
+
+#[sqlx::test]
+async fn password_protected_link_redirect(pool: PgPool) {
+    const TEST_URL: &str = "https://example.com";
+    const TEST_ALIAS: &str = "secretlink";
+    const TEST_PASSWORD: &str = "mysecret123";
+
+    let router = router(pool).await;
+
+    // Create a password-protected link
+    let request_body = Body::from(
+        serde_json::to_vec(
+            &json!({"url": TEST_URL, "name": TEST_ALIAS, "password": TEST_PASSWORD}),
+        )
+        .unwrap(),
+    );
+    let request = Request::post("/api/shorten")
+        .header("content-type", "application/json")
+        .body(request_body)
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    // Redirect without password should fail with 401
+    let request = Request::get(format!("/r/{TEST_ALIAS}"))
+        .body(Body::empty())
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::UNAUTHORIZED,
+        "Expected 401 when no password provided"
+    );
+
+    // Redirect with wrong password should fail with 401
+    let request = Request::get(format!("/r/{TEST_ALIAS}?password=wrongpass"))
+        .body(Body::empty())
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::UNAUTHORIZED,
+        "Expected 401 when wrong password provided"
+    );
+
+    // Redirect with correct password should succeed
+    let request = Request::get(format!("/r/{TEST_ALIAS}?password={TEST_PASSWORD}"))
+        .body(Body::empty())
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::PERMANENT_REDIRECT,
+        "Expected redirect when correct password provided"
+    );
+    assert_eq!(
+        response
+            .headers()
+            .get(axum::http::header::LOCATION)
+            .unwrap(),
+        TEST_URL,
+    );
+}

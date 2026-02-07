@@ -1,9 +1,9 @@
-use anyhow::anyhow;
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
-use rand_core::OsRng;
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use sqlx::PgPool;
 
 use crate::{domain::User, services::ServiceError};
+
+use super::hash_password;
 
 #[tracing::instrument(name = "services::create_user_account", skip_all)]
 pub async fn create_user(
@@ -12,10 +12,7 @@ pub async fn create_user(
     hasher: &Argon2<'_>,
     pool: &PgPool,
 ) -> Result<Option<User>, ServiceError> {
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = hasher
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|_| anyhow!("failed to hash"))?;
+    let hash = hash_password(password, hasher)?;
 
     let rec_opt = sqlx::query!(
         r#"
@@ -25,7 +22,7 @@ pub async fn create_user(
         RETURNING id
         "#,
         username,
-        hash.to_string()
+        hash
     )
     .fetch_optional(pool)
     .await
@@ -58,7 +55,8 @@ pub async fn authenticate_user(
     };
 
     let hash = PasswordHash::new(&rec.password_hash)
-        .map_err(|e| anyhow::anyhow!("invalid password hash: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("invalid password hash: {e}"))
+        .map_err(ServiceError::Other)?;
 
     if hasher.verify_password(password.as_bytes(), &hash).is_err() {
         return Err(ServiceError::AuthError);
