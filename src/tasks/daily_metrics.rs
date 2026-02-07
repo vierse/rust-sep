@@ -7,7 +7,7 @@ use time::OffsetDateTime;
 use crate::metrics::{Metrics, MetricsMap};
 
 // TODO: move it into settings?
-const CHUNK_SIZE: usize = 50;
+const CHUNK_SIZE: usize = 500;
 
 pub async fn process_daily_metrics(pool: PgPool, metrics: Arc<Metrics>) -> Result<()> {
     let map: Arc<MetricsMap> = metrics.swap_map();
@@ -71,6 +71,8 @@ async fn flush_to_db(
         return Ok(());
     }
 
+    let mut tx = pool.begin().await?;
+
     sqlx::query!(
         r#"
         INSERT INTO daily_metrics (day, link_id, hits, last_access)
@@ -89,8 +91,26 @@ async fn flush_to_db(
         hits_col,
         last_access_col,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
 
+    sqlx::query!(
+        r#"
+        WITH ids AS (
+          SELECT link_id
+          FROM UNNEST($1::bigint[]) AS t(link_id)
+        )
+        UPDATE links_main
+        SET last_seen = CURRENT_DATE
+        FROM ids
+        WHERE links_main.id = ids.link_id
+          AND links_main.last_seen < CURRENT_DATE
+        "#,
+        link_id_col,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
     Ok(())
 }

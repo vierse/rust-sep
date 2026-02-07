@@ -5,6 +5,7 @@ use argon2::Argon2;
 use moka::future::Cache;
 use sqids::Sqids;
 use sqlx::{PgPool, postgres::PgPoolOptions};
+use time::Date;
 use tokio::{net::TcpListener, time::timeout};
 use tokio_util::sync::CancellationToken;
 
@@ -21,6 +22,7 @@ use crate::{
 pub struct CachedLink {
     pub id: i64,
     pub url: String,
+    pub last_seen: Date,
 }
 
 #[derive(Clone)]

@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use serde::{Deserialize, Serialize};
+use time::{Duration, OffsetDateTime};
 
 use crate::{
     api::{auth::MaybeUser, error::ApiError},
@@ -13,11 +14,13 @@ use crate::{
     services,
 };
 
+// TODO: settings
+const EXPIRY_DAYS: i64 = 30;
+
 #[derive(Serialize, Deserialize)]
 pub struct ShortenRequest {
     pub url: String,
     pub name: Option<String>,
-    pub expires_at: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -60,6 +63,12 @@ pub async fn redirect(
         ApiError::not_found()
     })?;
 
+    let today = OffsetDateTime::now_utc().date();
+    if link.last_seen < today.saturating_sub(Duration::days(EXPIRY_DAYS)) {
+        return Err(ApiError::public(StatusCode::GONE, "The link has expired"));
+    }
+    // TODO: mark the expired link for cleanup
+
     // Update metrics
     app.metrics.record_hit(link.id);
 
@@ -75,18 +84,6 @@ pub async fn shorten(
         tracing::debug!(error = %e, "url parse error");
         ApiError::from(e)
     })?;
-
-    // Parse and validate expires_at if provided, otherwise default to 7 days
-    let expires_at = match expires_at {
-        Some(expires_str) => match validate_expires_at(&expires_str) {
-            Ok(dt) => dt,
-            Err(e) => {
-                tracing::warn!(cause = %e, "expires_at validation failed");
-                return (StatusCode::BAD_REQUEST).into_response();
-            }
-        },
-        None => OffsetDateTime::now_utc() + time::Duration::days(7),
-    };
 
     match name {
         // If request contains an alias, validate and save it

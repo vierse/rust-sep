@@ -6,6 +6,7 @@ use axum::{
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use sqlx::PgPool;
+use time::{Duration, OffsetDateTime};
 use tower::ServiceExt;
 
 use axum::Router;
@@ -199,4 +200,41 @@ async fn recently_added_links(pool: PgPool) {
 
     let links: Vec<String> = json(response).await;
     assert_eq!(links, vec![TEST_URL2, TEST_URL]);
+}
+
+#[sqlx::test]
+async fn redirect_expired_link(pool: PgPool) {
+    const TEST_URL: &str = "https://example.com/";
+    const ALIAS: &str = "testing";
+
+    let expired_on = OffsetDateTime::now_utc()
+        .date()
+        .saturating_sub(Duration::days(31));
+
+    sqlx::query!(
+        r#"
+        INSERT INTO links_main (alias, url, last_seen)
+        VALUES ($1, $2, $3)
+        "#,
+        ALIAS,
+        TEST_URL,
+        expired_on
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let router = router(pool).await;
+
+    let request = Request::get(format!("/r/{ALIAS}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(
+        response.status(),
+        StatusCode::GONE,
+        "Expected expired link to return 410 Gone"
+    );
 }
