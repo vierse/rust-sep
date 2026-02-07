@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, url, last_seen FROM links_main WHERE alias = $1",
+  "query": "SELECT id, url, last_seen, password_hash FROM links_main WHERE alias = $1",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "last_seen",
         "type_info": "Date"
+      },
+      {
+        "ordinal": 3,
+        "name": "password_hash",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -27,8 +32,9 @@
     "nullable": [
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "07be24277dadad64ff720513451391a1c3ccb8fb23c0975f12ab67a8171daa19"
+  "hash": "aad333ffd9bd2cfb73bd9cba88cb2a61d1e2a9d85d0c7bf7d7c1f6e8d2a7371e"
 }

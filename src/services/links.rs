@@ -1,4 +1,5 @@
 use anyhow::Context;
+use argon2::Argon2;
 use serde::Serialize;
 use sqids::Sqids;
 use sqlx::PgPool;
@@ -9,24 +10,35 @@ use crate::{
     services::ServiceError,
 };
 
+use super::hash_password;
+
 /// Create a new link for the provided URL
-#[tracing::instrument(name = "services::create_link", skip(generator, pool))]
+#[tracing::instrument(name = "services::create_link", skip(generator, pool, hasher))]
 pub async fn create_link(
     url: &str,
     generator: &Sqids,
     pool: &PgPool,
     user_id: Option<UserId>,
+    password: Option<&str>,
+    hasher: &Argon2<'_>,
 ) -> Result<String, ServiceError> {
+    let password_hash = password
+        .filter(|p| !p.is_empty())
+        .map(|p| hash_password(p, hasher))
+        .transpose()?;
+    let password_hash_ref = password_hash.as_deref();
+
     let mut tx = pool.begin().await.map_err(ServiceError::DatabaseError)?;
     // Insert the url into database to get a unique id
     let rec = sqlx::query!(
         r#"
-        INSERT INTO links_main (url, user_id)
-        VALUES ($1, $2)
+        INSERT INTO links_main (url, user_id, password_hash)
+        VALUES ($1, $2, $3)
         RETURNING id
         "#,
         url,
         user_id,
+        password_hash_ref,
     )
     .fetch_one(&mut *tx)
     .await
@@ -67,23 +79,32 @@ pub async fn create_link(
 /// Create a link with user-defined alias for the provided URL
 ///
 /// Returns Ok(false) if the alias is already taken
-#[tracing::instrument(name = "services::create_link_with_alias", skip(pool))]
+#[tracing::instrument(name = "services::create_link_with_alias", skip(pool, hasher))]
 pub async fn create_link_with_alias(
     url: &str,
     alias: &str,
     pool: &PgPool,
     user_id: Option<UserId>,
+    password: Option<&str>,
+    hasher: &Argon2<'_>,
 ) -> Result<bool, ServiceError> {
+    let password_hash = password
+        .filter(|p| !p.is_empty())
+        .map(|p| hash_password(p, hasher))
+        .transpose()?;
+    let password_hash_ref = password_hash.as_deref();
+
     let rec = sqlx::query!(
         r#"
-        INSERT INTO links_main (alias, url, user_id)
-        VALUES ($1, $2, $3)
+        INSERT INTO links_main (alias, url, user_id, password_hash)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (alias) DO NOTHING
         RETURNING id
         "#,
         alias,
         url,
         user_id,
+        password_hash_ref,
     )
     .fetch_optional(pool)
     .await
@@ -101,7 +122,7 @@ pub async fn query_url_by_alias(
     pool: &PgPool,
 ) -> Result<Option<CachedLink>, ServiceError> {
     let rec_opt = sqlx::query!(
-        r#"SELECT id, url, last_seen FROM links_main WHERE alias = $1"#,
+        r#"SELECT id, url, last_seen, password_hash FROM links_main WHERE alias = $1"#,
         alias
     )
     .fetch_optional(pool)
@@ -119,6 +140,7 @@ pub async fn query_url_by_alias(
                 id: rec.id,
                 url,
                 last_seen: rec.last_seen,
+                password_hash: rec.password_hash,
             })
         })
         .transpose()
