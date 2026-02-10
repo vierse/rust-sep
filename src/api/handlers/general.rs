@@ -94,10 +94,7 @@ pub async fn redirect(
                     .verify_password(provided.as_bytes(), &parsed_hash)
                     .is_err()
                 {
-                    return Err(ApiError::public(
-                        StatusCode::UNAUTHORIZED,
-                        "Wrong password",
-                    ));
+                    return Err(ApiError::public(StatusCode::UNAUTHORIZED, "Wrong password"));
                 }
             }
         }
