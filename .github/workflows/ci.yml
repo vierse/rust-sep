@@ -46,7 +46,7 @@ jobs:
         with:
           components: rustfmt, clippy
       - name: install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --features postgres --locked
+        run: cargo install sqlx-cli --no-default-features --features postgres --locked --force
       - name: SQL migrations
         run: sqlx migrate run
       - name: rustfmt
