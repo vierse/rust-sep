@@ -261,15 +261,15 @@ async fn password_protected_link_redirect(pool: PgPool) {
     let response = router.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::CREATED);
 
-    // Redirect without password should fail with 401
+    // Redirect without password should redirect to SPA prompt
     let request = Request::get(format!("/r/{TEST_ALIAS}"))
         .body(Body::empty())
         .unwrap();
     let response = router.clone().oneshot(request).await.unwrap();
     assert_eq!(
         response.status(),
-        StatusCode::UNAUTHORIZED,
-        "Expected 401 when no password provided"
+        StatusCode::TEMPORARY_REDIRECT,
+        "Expected 307 redirect to prompt when no password provided"
     );
 
     // Redirect with wrong password should fail with 401
