@@ -8,6 +8,7 @@ import { clipboardCopy } from "../util";
 type ShortenRequest = {
   url: string;
   name?: string;
+  password?: string;
 }
 
 type ShortenResponse = {
@@ -20,6 +21,7 @@ export function MainView() {
 
   const [userUrl, setUserUrl] = React.useState("");
   const [urlName, setUrlName] = React.useState<string | undefined>(undefined);
+  const [userPassword, setUserPassword] = React.useState<string | undefined>(undefined);
   const [result, setResult] = React.useState("");
   const [showOptions, setShowOptions] = React.useState(false);
   const [state, setState] = React.useState<State>("idle");
@@ -29,6 +31,7 @@ export function MainView() {
   const clearState = () => {
     setUserUrl("");
     setUrlName(undefined);
+    setUserPassword(undefined);
     setResult("");
     setShowOptions(false);
     setState("idle");
@@ -40,7 +43,7 @@ export function MainView() {
     try {
       setWaiting(true);
 
-      const body = { url: userUrl, name: urlName } as ShortenRequest;
+      const body = { url: userUrl, name: urlName || undefined, password: userPassword || undefined } as ShortenRequest;
       const res = await postJson<ShortenRequest, ShortenResponse>("/api/shorten", body, ac.signal);
       const shortUrl = `${window.location.origin}/r/${res.alias}`;
       setResult(shortUrl);
@@ -88,6 +91,13 @@ export function MainView() {
               placeholder="Pick a short name for your URL"
               value={urlName}
               onChange={(ev) => setUrlName(ev.target.value)}
+            />
+            <TextField.Root
+              placeholder="Password (optional)"
+              type="password"
+              value={userPassword}
+              onChange={(ev) => setUserPassword(ev.target.value)}
+              style={{ marginTop: "0.5rem" }}
             />
           </Box>
         )}

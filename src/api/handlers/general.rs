@@ -79,19 +79,27 @@ pub async fn redirect(
 
     // Check password if the link is protected
     if let Some(ref stored_hash) = link.password_hash {
-        let provided = query.password.as_deref().unwrap_or("");
-        let parsed_hash = PasswordHash::new(stored_hash).map_err(|e| {
-            tracing::error!(error = %e, "failed to parse stored password hash");
-            ApiError::internal()
-        })?;
-        if Argon2::default()
-            .verify_password(provided.as_bytes(), &parsed_hash)
-            .is_err()
-        {
-            return Err(ApiError::public(
-                StatusCode::UNAUTHORIZED,
-                "Password required",
-            ));
+        match query.password.as_deref() {
+            // No password provided — redirect to the SPA prompt page
+            None | Some("") => {
+                return Ok(Redirect::temporary(&format!("/?unlock={}", alias)));
+            }
+            // Password provided — verify it
+            Some(provided) => {
+                let parsed_hash = PasswordHash::new(stored_hash).map_err(|e| {
+                    tracing::error!(error = %e, "failed to parse stored password hash");
+                    ApiError::internal()
+                })?;
+                if Argon2::default()
+                    .verify_password(provided.as_bytes(), &parsed_hash)
+                    .is_err()
+                {
+                    return Err(ApiError::public(
+                        StatusCode::UNAUTHORIZED,
+                        "Wrong password",
+                    ));
+                }
+            }
         }
     }
 
