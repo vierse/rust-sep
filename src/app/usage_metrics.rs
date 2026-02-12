@@ -133,4 +133,5 @@ macro_rules! tracked_categories {
 
 }
 
-tracked_categories!(redirect, Redirect; recent, Recent; shorten, Shorten);
+tracked_categories!(redirect, Redirect; recent, Recent; shorten, Shorten; recently_added, RecentlyAdded;
+                    authenticate_session, AuthenticateSession; authenticate_user, AuthenticateUser);

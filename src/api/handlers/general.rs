@@ -10,7 +10,7 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{
     api::{auth::MaybeUser, error::ApiError},
-    app::AppState,
+    app::{AppState, usage_metrics::Category},
     domain::{Alias, MAX_ALIAS_LENGTH, Url},
     services,
 };
@@ -46,6 +46,8 @@ pub async fn redirect(
     Path(alias): Path<String>,
     axum::extract::Query(query): axum::extract::Query<RedirectQuery>,
 ) -> Result<Redirect, ApiError> {
+    app.usage_metrics.log(Category::Redirect).await;
+
     if alias.len() > MAX_ALIAS_LENGTH {
         tracing::error!("maximum alias length exceeded");
         return Err(ApiError::internal());
@@ -116,6 +118,8 @@ pub async fn shorten(
         password,
     }): Json<ShortenRequest>,
 ) -> Result<ShortenResponse, ApiError> {
+    app.usage_metrics.log(Category::Shorten).await;
+
     let url = Url::parse(&url).map_err(|e| {
         tracing::debug!(error = %e, "url parse error");
         ApiError::from(e)
@@ -178,6 +182,8 @@ pub async fn shorten(
 }
 
 pub async fn recently_added_links(State(app): State<AppState>) -> Result<Response, ApiError> {
+    app.usage_metrics.log(Category::RecentlyAdded).await;
+
     let links = services::recently_added_links(10, &app.pool)
         .await
         .map_err(|e| {

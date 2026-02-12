@@ -13,7 +13,7 @@ use crate::{
         auth::{MaybeUser, RequireUser},
         error::ApiError,
     },
-    app::AppState,
+    app::{AppState, usage_metrics::Category},
     services,
 };
 
@@ -38,6 +38,7 @@ pub async fn authenticate_session(
     RequireUser(user_id): RequireUser,
     State(app): State<AppState>,
 ) -> Result<Response<Body>, ApiError> {
+    app.usage_metrics.log(Category::AuthenticateSession).await;
     let user = app.sessions.get_user(user_id)?;
     Ok(AuthResponse {
         username: user.name().to_string(),
@@ -50,6 +51,7 @@ pub async fn authenticate_user(
     State(app): State<AppState>,
     Json(AuthRequest { username, password }): Json<AuthRequest>,
 ) -> Result<Response<Body>, ApiError> {
+    app.usage_metrics.log(Category::AuthenticateUser).await;
     // TODO: validate length
 
     if user_id.is_some() {
