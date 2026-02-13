@@ -1,4 +1,4 @@
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use argon2::{PasswordHash, PasswordVerifier};
 use axum::{
     Json,
     extract::{Path, State},
@@ -90,7 +90,8 @@ pub async fn redirect(
                     tracing::error!(error = %e, "failed to parse stored password hash");
                     ApiError::internal()
                 })?;
-                if Argon2::default()
+                if app
+                    .hasher
                     .verify_password(provided.as_bytes(), &parsed_hash)
                     .is_err()
                 {
