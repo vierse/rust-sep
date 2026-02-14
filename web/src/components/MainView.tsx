@@ -5,19 +5,23 @@ import React from "react";
 import { postJson } from "../api";
 import { clipboardCopy } from "../util";
 
+import { useNotify } from "./NotifyProvider";
+
 type ShortenRequest = {
   url: string;
   name?: string;
   password?: string;
-}
+};
 
 type ShortenResponse = {
   alias: string;
-}
+};
 
 type State = "idle" | "ok" | "err";
 
 export function MainView() {
+
+  const { notifyOk, notifyErr, notifyShort, dismiss } = useNotify();
 
   const [userUrl, setUserUrl] = React.useState("");
   const [urlName, setUrlName] = React.useState<string | undefined>(undefined);
@@ -35,12 +39,14 @@ export function MainView() {
     setResult("");
     setShowOptions(false);
     setState("idle");
+    dismiss();
   };
 
   const submit = async () => {
     const ac = new AbortController();
     const timeoutId = setTimeout(() => ac.abort(), 5_000);
     try {
+      dismiss();
       setWaiting(true);
 
       const body = { url: userUrl, name: urlName || undefined, password: userPassword || undefined } as ShortenRequest;
@@ -48,12 +54,15 @@ export function MainView() {
       const shortUrl = `${window.location.origin}/r/${res.alias}`;
       setResult(shortUrl);
       setState("ok");
+      notifyOk("New link created");
     } catch (err) {
       setState("err");
       if (err instanceof DOMException && err.name === "AbortError") {
+        notifyErr("Server error", "Request timed out");
         console.log("Timeout error");
       } else {
         const errMsg = err instanceof Error ? err.message : "Unknown error";
+        notifyErr("Could not create a link", errMsg);
         console.log(`Error: ${errMsg}`);
       }
     } finally {
@@ -65,6 +74,7 @@ export function MainView() {
   const inputStatus = state === "idle" ? "" : state === "ok" ? "ok" : "err";
   const firstButtonColor = state === "idle" ? "green" : state === "err" ? "green" : "indigo";
   const readOnly = waiting || state === "ok";
+  const canSubmit = userUrl.trim().length > 0;
   return (
     <>
       <Box data-status={inputStatus} className="inputField">
@@ -103,7 +113,7 @@ export function MainView() {
         )}
       </Box>
       <Box>
-        <Button color={firstButtonColor} loading={waiting} onClick={async () => {
+        <Button color={firstButtonColor} loading={waiting} disabled={!canSubmit} onClick={async () => {
           switch (state) {
             case "idle": {
               await submit();
@@ -112,6 +122,7 @@ export function MainView() {
             }
             case "ok": {
               await clipboardCopy(result);
+              notifyShort("Copied to clipboard!");
               break;
             }
             case "err": {
@@ -126,16 +137,16 @@ export function MainView() {
           ) : state === "err" ? (
             <ReloadIcon />
           ) : (
-            <EraserIcon />
+            <ClipboardIcon />
           )}
         </Button>
 
         <Button color="red" disabled={!(userUrl || urlName || result) || waiting} onClick={() => {
           clearState();
         }}>
-          <ClipboardIcon />
+          <EraserIcon />
         </Button>
-      </Box>
+      </Box >
     </>
   );
 }

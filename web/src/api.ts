@@ -1,5 +1,3 @@
-type ApiErrorBody = { reason: string };
-
 export async function postJson<RequestType, ResponseType>(
   path: string,
   body: RequestType,
@@ -19,8 +17,8 @@ export async function postJson<RequestType, ResponseType>(
     let reason = `Request error (${res.status})`;
 
     try {
-      const err = (await res.json()) as ApiErrorBody;
-      if (err?.reason) reason = err.reason;
+      const err = await res.json();
+      if (typeof err === "string") reason = err;
     } catch {
       // ignore
     }
@@ -46,8 +44,8 @@ export async function getJson<ResponseType>(
     let reason = `Request error (${res.status})`;
 
     try {
-      const err = (await res.json()) as ApiErrorBody;
-      if (err?.reason) reason = err.reason;
+      const err = await res.json();
+      if (typeof err === "string") reason = err;
     } catch {
       // ignore
     }
@@ -69,8 +67,8 @@ export async function deleteReq(path: string, signal?: AbortSignal): Promise<voi
     let reason = `Request error (${res.status})`;
 
     try {
-      const err = (await res.json()) as ApiErrorBody;
-      if (err?.reason) reason = err.reason;
+      const err = await res.json();
+      if (typeof err === "string") reason = err;
     } catch {
       // ignore
     }

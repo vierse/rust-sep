@@ -1,0 +1,99 @@
+#notify-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    pointer-events: none;
+    /* don't block the app */
+}
+
+/* MainView TextField */
+
+.inputField {
+    display: inline-block;
+    border-radius: var(--radius-3);
+}
+
+.inputField[data-status="ok"] {
+    box-shadow: 0 0 0 1px var(--green-9);
+}
+
+.inputField[data-status="err"] {
+    box-shadow: 0 0 0 1px var(--red-9);
+}
+
+/* ToastProvider */
+
+.ToastViewport {
+    position: fixed;
+    top: 0px;
+    left: 50%;
+    transform: translateX(-50%);
+
+    width: 360px;
+    max-width: calc(100vw - 32px);
+
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    outline: none;
+
+    /* viewport is <ol>, this removes numbering */
+    list-style: none;
+}
+
+
+.ToastRoot {
+    position: relative;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 12px;
+    padding: 12px 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.ToastRoot[data-variant="ok"] {
+    background: var(--green-9);
+}
+
+.ToastRoot[data-variant="err"] {
+    background: var(--red-9);
+}
+
+.ToastRoot[data-variant="info"] {
+    background: var(--accent-9);
+}
+
+.ToastClose {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+
+    border: 0;
+    background: rgba(0, 0, 0, 0.06);
+    cursor: pointer;
+
+    display: grid;
+    place-items: center;
+
+    font-size: 16px;
+    line-height: 1;
+}
+
+.ToastClose:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.ToastTitle {
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1.2;
+}
+
+.ToastDescription {
+    margin-top: 6px;
+    font-size: 14px;
+}

@@ -4,29 +4,33 @@ import { ClipboardIcon, Cross1Icon, PersonIcon } from "@radix-ui/react-icons";
 import React from "react";
 import { deleteReq, getJson, postJson } from "../api";
 import { clipboardCopy } from "../util";
+import { useNotify } from "./NotifyProvider";
 
 type AuthRequest = {
   username: string;
   password: string;
-}
+};
 
 type AuthResponse = {
   username: string;
-}
+};
 
 export function UserView() {
   const [open, setOpen] = React.useState(false);
   const [waiting, setWaiting] = React.useState(false);
   const [user, setUser] = React.useState("");
 
+  const { notifyOk, notifyErr, dismiss } = useNotify();
+
   React.useEffect(() => {
     (async () => {
       try {
         const user = await getJson<AuthResponse>("/api/auth/me");
         setUser(user.username);
+        notifyOk("Restored previous session");
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : "Session restore failed";
-        console.log(errMsg)
+        console.log(errMsg);
       }
     })();
   }, []);
@@ -35,18 +39,18 @@ export function UserView() {
 
     setWaiting(true);
 
+    const form = ev.currentTarget;
+    const fd = new FormData(form);
+
+    const username = String(fd.get("username") ?? "");
+    const password = String(fd.get("password") ?? "");
+
+    const submitter = (ev.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const action = submitter?.value;
+
+    const body = { username, password } as AuthRequest;
+
     try {
-      const form = ev.currentTarget;
-      const fd = new FormData(form);
-
-      const username = String(fd.get("username") ?? "");
-      const password = String(fd.get("password") ?? "");
-
-      const submitter = (ev.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-      const action = submitter?.value;
-
-      const body = { username, password } as AuthRequest;
-
       const user =
         action === "register"
           ? await postJson<AuthRequest, AuthResponse>("/api/auth/register", body)
@@ -55,9 +59,12 @@ export function UserView() {
       setUser(user.username);
       setOpen(false);
       form.reset();
+
+      notifyOk("Logged in!");
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Login failed";
-      console.log(errMsg)
+      const errMsg = err instanceof Error ? err.message : "Internal error";
+      const notifyReason = action === "register" ? "Could not register" : "Could not login";
+      notifyErr(notifyReason, errMsg);
     } finally {
       setWaiting(false);
     }
@@ -70,7 +77,7 @@ export function UserView() {
         setOpen(next);
       }}>
         <Dialog.Trigger>
-          <Button>{user && <PersonIcon />}{user || "Login"}</Button>
+          <Button onClick={() => { dismiss() }}>{user && <PersonIcon />}{user || "Login"}</Button>
         </Dialog.Trigger>
         <Dialog.Content maxWidth="450px" size="4">
           {user === "" ? (
@@ -124,13 +131,18 @@ export function UserView() {
   );
 }
 
-type LinkItem = { alias: string; url: string };
+type LinkItem = {
+  alias: string;
+  url: string
+};
 
 function LinksTable() {
   const [links, setLinks] = React.useState<LinkItem[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   const [removingLink, setRemovingLink] = React.useState(false);
+
+  const { notifyOk, notifyErr, notifyShort } = useNotify();
 
   React.useEffect(() => {
     (async () => {
@@ -148,6 +160,7 @@ function LinksTable() {
   const copyLink = async (link: LinkItem) => {
     const shortUrl = `${window.location.origin}/r/${link.alias}`;
     clipboardCopy(shortUrl);
+    notifyShort("Copied to clipboard!");
   };
 
   const removeLink = async (link: LinkItem) => {
@@ -155,7 +168,9 @@ function LinksTable() {
     try {
       await deleteReq(`/api/user/link/${encodeURIComponent(link.alias)}`);
       setLinks((xs) => xs.filter((l) => l.alias !== link.alias));
+      notifyOk("Link successfully deleted");
     } catch (err) {
+      notifyErr("Failed to delete the link");
       console.log(err);
     } finally {
       setRemovingLink(false);

@@ -3,14 +3,14 @@ import ReactDOM from "react-dom/client";
 import { Theme } from "@radix-ui/themes"
 
 import "@radix-ui/themes/styles.css";
-import "./styles/view.css"
+import "./styles.css"
 
 import App from "./App";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <Theme appearance="dark">
-    <React.StrictMode>
+  <React.StrictMode>
+    <Theme appearance="dark">
       <App />
-    </React.StrictMode>
-  </Theme>
+    </Theme>
+  </React.StrictMode>
 );
