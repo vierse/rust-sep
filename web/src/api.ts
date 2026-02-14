@@ -1,8 +1,25 @@
-export async function postJson<RequestType, ResponseType>(
+function containsJson(res: Response) {
+  const ct = res.headers.get("content-type") ?? "";
+  return ct.includes("application/json");
+}
+
+export async function postReq<RequestType, ResponseType>(
   path: string,
   body: RequestType,
   signal?: AbortSignal
-): Promise<ResponseType> {
+): Promise<ResponseType>;
+
+export async function postReq<RequestType>(
+  path: string,
+  body: RequestType,
+  signal?: AbortSignal
+): Promise<void>;
+
+export async function postReq<RequestType, ResponseType>(
+  path: string,
+  body: RequestType,
+  signal?: AbortSignal
+): Promise<ResponseType | void> {
   const res = await fetch(path, {
     method: "POST",
     headers: {
@@ -25,10 +42,15 @@ export async function postJson<RequestType, ResponseType>(
 
     throw new Error(reason);
   }
-  return (await res.json()) as ResponseType;
+
+  if (containsJson(res)) {
+    return (await res.json()) as ResponseType;
+  }
+
+  return;
 }
 
-export async function getJson<ResponseType>(
+export async function getReq<ResponseType>(
   path: string,
   signal?: AbortSignal
 ): Promise<ResponseType> {

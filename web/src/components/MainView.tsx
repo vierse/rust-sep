@@ -2,7 +2,7 @@ import { TextField, Box, IconButton, Button } from "@radix-ui/themes";
 import { Link2Icon, DotsHorizontalIcon, ClipboardIcon, EraserIcon, PaperPlaneIcon, ReloadIcon } from "@radix-ui/react-icons"
 
 import React from "react";
-import { postJson } from "../api";
+import { postReq } from "../api";
 import { clipboardCopy } from "../util";
 
 import { useNotify } from "./NotifyProvider";
@@ -50,7 +50,7 @@ export function MainView() {
       setWaiting(true);
 
       const body = { url: userUrl, name: urlName || undefined, password: userPassword || undefined } as ShortenRequest;
-      const res = await postJson<ShortenRequest, ShortenResponse>("/api/shorten", body, ac.signal);
+      const res = await postReq<ShortenRequest, ShortenResponse>("/api/shorten", body, ac.signal);
       const shortUrl = `${window.location.origin}/r/${res.alias}`;
       setResult(shortUrl);
       setState("ok");

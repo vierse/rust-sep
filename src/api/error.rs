@@ -33,6 +33,13 @@ impl ApiError {
         }
     }
 
+    pub fn bad_request() -> Self {
+        Self {
+            status_code: StatusCode::BAD_REQUEST,
+            reason: "Invalid request",
+        }
+    }
+
     pub fn internal() -> Self {
         Self {
             status_code: StatusCode::INTERNAL_SERVER_ERROR,

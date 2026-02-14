@@ -2,43 +2,50 @@ import { TextField, Box, Button, Flex, Text } from "@radix-ui/themes";
 import { LockClosedIcon } from "@radix-ui/react-icons"
 
 import React from "react";
+import { postReq } from "../api";
+import { useNotify } from "./NotifyProvider";
 
-type State = "idle" | "ok" | "err";
+type State = "idle" | "err";
 
-export function PasswordPrompt({ alias }: { alias: string }) {
+type UnlockRequest = {
+  password: string;
+};
+
+type UnlockResponse = {
+  url: string;
+};
+
+export function UnlockView({ alias }: { alias: string }) {
 
   const [waiting, setWaiting] = React.useState(false);
   const [state, setState] = React.useState<State>("idle");
 
+  const { notifyErr } = useNotify();
+
   const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
 
+    setState("idle");
     setWaiting(true);
 
+    const form = ev.currentTarget;
+    const fd = new FormData(form);
+
+    const password = String(fd.get("password") ?? "");
+
+    const body = { password } as UnlockRequest;
+    const path = `/api/unlock/${encodeURIComponent(alias)}`;
+
     try {
-      const form = ev.currentTarget;
-      const fd = new FormData(form);
-      const password = String(fd.get("password") ?? "");
-
-      const url = `/r/${encodeURIComponent(alias)}?password=${encodeURIComponent(password)}`;
-      const res = await fetch(url, { redirect: "manual" });
-
-      if (res.type === "opaqueredirect") {
-        window.location.href = url;
-        return;
-      }
-
-      setState("err");
-      const errMsg = res.status === 401 ? "Wrong password" : `Unexpected (${res.status})`;
-      console.log(errMsg);
+      const res = await postReq<UnlockRequest, UnlockResponse>(path, body);
+      window.location.assign(res.url);
     } catch (err) {
       setState("err");
-      const errMsg = err instanceof Error ? err.message : "Network error";
-      console.log(errMsg);
-    } finally {
+      const errMsg = err instanceof Error ? err.message : "Internal error";
+      notifyErr("Could not unlock the link", errMsg);
       setWaiting(false);
     }
-  };
+  }
 
   const inputStatus = state === "idle" ? "" : "err";
   return (
@@ -50,18 +57,13 @@ export function PasswordPrompt({ alias }: { alias: string }) {
             <Text size="4" weight="bold">This link is password-protected</Text>
 
             <Box data-status={inputStatus} className="inputField">
-              <label>
-                <Text as="div" size="4" mb="1" weight="bold">
-                  Password
-                </Text>
-                <TextField.Root
-                  name="password"
-                  type="password"
-                  placeholder="Enter the link password"
-                  style={{ width: "20rem" }}
-                  required
-                />
-              </label>
+              <TextField.Root
+                name="password"
+                type="password"
+                placeholder="Enter the link password"
+                style={{ width: "20rem" }}
+                required
+              />
             </Box>
 
             <Flex gap="4" mt="2" justify="end">
