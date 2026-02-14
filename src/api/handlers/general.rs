@@ -10,13 +10,14 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{
     api::{auth::MaybeUser, error::ApiError},
-    app::{AppState, usage_metrics::Category},
+    app::{AppState, CachedLink, usage_metrics::Category},
     domain::{Alias, MAX_ALIAS_LENGTH, Url},
     services,
 };
 
 // TODO: settings
 const EXPIRY_DAYS: i64 = 30;
+const UNLOCK_PATH: &str = "unlock";
 
 #[derive(Serialize, Deserialize)]
 pub struct ShortenRequest {
@@ -36,35 +37,18 @@ impl IntoResponse for ShortenResponse {
     }
 }
 
-#[derive(Deserialize)]
-pub struct RedirectQuery {
-    pub password: Option<String>,
-}
-
-pub async fn redirect(
-    State(app): State<AppState>,
-    Path(alias): Path<String>,
-    axum::extract::Query(query): axum::extract::Query<RedirectQuery>,
-) -> Result<Redirect, ApiError> {
-    app.usage_metrics.log(Category::Redirect);
-
+async fn fetch_link(alias: &str, app: &AppState) -> Result<CachedLink, ApiError> {
     if alias.len() > MAX_ALIAS_LENGTH {
         tracing::error!("maximum alias length exceeded");
         return Err(ApiError::internal());
     }
 
-    let key = alias.clone();
-    let pool = app.pool.clone();
-
-    // Try to get the URL from cache else query DB
     let link_opt = app
         .cache
-        .try_get_with(key.clone(), async move {
-            services::query_url_by_alias(&key, &pool).await
-        })
+        .try_get_with_by_ref(alias, services::query_url_by_alias(alias, &app.pool))
         .await
         .map_err(|e| {
-            tracing::error!(error = %e, "failed to query or load url from cache");
+            tracing::error!(error = %e, "failed to query the url");
             ApiError::internal()
         })?;
 
@@ -79,34 +63,70 @@ pub async fn redirect(
     }
     // TODO: mark the expired link for cleanup
 
-    // Check password if the link is protected
-    if let Some(ref stored_hash) = link.password_hash {
-        match query.password.as_deref() {
-            // No password provided — redirect to the SPA prompt page
-            None | Some("") => {
-                return Ok(Redirect::temporary(&format!("/?unlock={}", alias)));
-            }
-            // Password provided — verify it
-            Some(provided) => {
-                let parsed_hash = PasswordHash::new(stored_hash).map_err(|e| {
-                    tracing::error!(error = %e, "failed to parse stored password hash");
-                    ApiError::internal()
-                })?;
-                if app
-                    .hasher
-                    .verify_password(provided.as_bytes(), &parsed_hash)
-                    .is_err()
-                {
-                    return Err(ApiError::public(StatusCode::UNAUTHORIZED, "Wrong password"));
-                }
-            }
-        }
+    Ok(link)
+}
+
+pub async fn redirect(
+    State(app): State<AppState>,
+    Path(alias): Path<String>,
+) -> Result<Redirect, ApiError> {
+    let link = fetch_link(&alias, &app).await?;
+
+    // Redirect to unlock view if the link is protected
+    if link.password_hash.is_some() {
+        return Ok(Redirect::temporary(&format!("/{UNLOCK_PATH}/{}", alias)));
     }
 
     // Update metrics
     app.metrics.record_hit(link.id);
 
-    Ok(Redirect::permanent(&link.url))
+    Ok(Redirect::temporary(&link.url))
+}
+
+#[derive(Deserialize)]
+pub struct UnlockRequest {
+    pub password: String,
+}
+
+#[derive(Serialize)]
+pub struct UnlockResponse {
+    pub url: String,
+}
+
+impl IntoResponse for UnlockResponse {
+    fn into_response(self) -> Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
+}
+
+pub async fn redirect_unlock(
+    State(app): State<AppState>,
+    Path(alias): Path<String>,
+    Json(UnlockRequest { password }): Json<UnlockRequest>,
+) -> Result<UnlockResponse, ApiError> {
+    let link = fetch_link(&alias, &app).await?;
+
+    let Some(password_hash) = link.password_hash else {
+        return Err(ApiError::bad_request());
+    };
+
+    let parsed_hash = PasswordHash::new(&password_hash).map_err(|e| {
+        tracing::debug!(error = %e, "password hash parse error");
+        ApiError::internal()
+    })?;
+
+    if app
+        .hasher
+        .verify_password(password.as_bytes(), &parsed_hash)
+        .is_err()
+    {
+        return Err(ApiError::public(StatusCode::UNAUTHORIZED, "Wrong password"));
+    }
+
+    // Update metrics
+    app.metrics.record_hit(link.id);
+
+    Ok(UnlockResponse { url: link.url })
 }
 
 pub async fn shorten(

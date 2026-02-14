@@ -2,7 +2,7 @@ import { Button, Dialog, Flex, IconButton, Inset, Table, Text, TextField } from 
 import { ClipboardIcon, Cross1Icon, PersonIcon } from "@radix-ui/react-icons";
 
 import React from "react";
-import { deleteReq, getJson, postJson } from "../api";
+import { deleteReq, getReq, postReq } from "../api";
 import { clipboardCopy } from "../util";
 import { useNotify } from "./NotifyProvider";
 
@@ -25,7 +25,7 @@ export function UserView() {
   React.useEffect(() => {
     (async () => {
       try {
-        const user = await getJson<AuthResponse>("/api/auth/me");
+        const user = await getReq<AuthResponse>("/api/auth/me");
         setUser(user.username);
         notifyOk("Restored previous session");
       } catch (err) {
@@ -53,8 +53,8 @@ export function UserView() {
     try {
       const user =
         action === "register"
-          ? await postJson<AuthRequest, AuthResponse>("/api/auth/register", body)
-          : await postJson<AuthRequest, AuthResponse>("/api/auth/login", body);
+          ? await postReq<AuthRequest, AuthResponse>("/api/auth/register", body)
+          : await postReq<AuthRequest, AuthResponse>("/api/auth/login", body);
 
       setUser(user.username);
       setOpen(false);
@@ -147,7 +147,7 @@ function LinksTable() {
   React.useEffect(() => {
     (async () => {
       try {
-        const data = await getJson<LinkItem[]>("/api/user/list");
+        const data = await getReq<LinkItem[]>("/api/user/list");
         setLinks(data);
       } catch (err) {
         console.error(err);
