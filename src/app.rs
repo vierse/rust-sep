@@ -34,7 +34,7 @@ pub struct AppState {
     pub metrics: Arc<Metrics>,
     pub usage_metrics: Arc<usage_metrics::Metrics>,
     pub cache: Cache<String, Option<CachedLink>>,
-    pub sessions: Arc<Sessions>,
+    pub sessions: Sessions,
     pub hasher: Arc<Argon2<'static>>,
 }
 
@@ -79,7 +79,7 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<Metrics>) -> Result<AppState> 
         sqids,
         metrics,
         cache,
-        sessions: Arc::new(Sessions::new()),
+        sessions: Sessions::default(),
         hasher: Arc::new(Argon2::default()),
         usage_metrics: Default::default(),
     })

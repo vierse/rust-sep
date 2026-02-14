@@ -1,5 +1,5 @@
-mod auth;
 mod error;
+mod extract;
 pub mod handlers;
 mod router;
 mod session;

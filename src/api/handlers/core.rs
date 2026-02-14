@@ -9,15 +9,15 @@ use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 
 use crate::{
-    api::{auth::MaybeUser, error::ApiError},
+    api::{error::ApiError, extract::MaybeUser},
     app::{AppState, CachedLink, usage_metrics::Category},
     domain::{Alias, MAX_ALIAS_LENGTH, Url},
     services,
 };
 
 // TODO: settings
-const EXPIRY_DAYS: i64 = 30;
-const UNLOCK_PATH: &str = "unlock";
+pub const EXPIRY_DAYS: i64 = 30;
+pub const UNLOCK_PATH: &str = "unlock";
 
 #[derive(Serialize, Deserialize)]
 pub struct ShortenRequest {
@@ -130,7 +130,7 @@ pub async fn redirect_unlock(
 }
 
 pub async fn shorten(
-    MaybeUser(user_id): MaybeUser,
+    MaybeUser(session_id_opt): MaybeUser,
     State(app): State<AppState>,
     Json(ShortenRequest {
         url,
@@ -144,6 +144,13 @@ pub async fn shorten(
         tracing::debug!(error = %e, "url parse error");
         ApiError::from(e)
     })?;
+
+    let mut user_id = None;
+
+    if let Some(session_id) = session_id_opt {
+        let session = app.sessions.get_session_data(&session_id)?;
+        user_id = Some(session.user_id);
+    }
 
     let password_ref = password.as_deref();
 

@@ -6,16 +6,17 @@ use axum::{
 };
 
 use crate::{
-    api::{auth::RequireUser, error::ApiError},
+    api::{error::ApiError, extract::RequireUser},
     app::AppState,
     services::{self, query_links_by_user_id},
 };
 
 pub async fn list_user_links(
-    RequireUser(user_id): RequireUser,
+    RequireUser(session_id): RequireUser,
     State(app): State<AppState>,
 ) -> Result<Response, ApiError> {
-    let links = query_links_by_user_id(&user_id, &app.pool)
+    let session = app.sessions.get_session_data(&session_id)?;
+    let links = query_links_by_user_id(&session.user_id, &app.pool)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "service error");
@@ -26,11 +27,12 @@ pub async fn list_user_links(
 }
 
 pub async fn remove_user_link(
-    RequireUser(user_id): RequireUser,
+    RequireUser(session_id): RequireUser,
     State(app): State<AppState>,
     Path(alias): Path<String>,
 ) -> Result<Response, ApiError> {
-    services::remove_user_link(&user_id, &alias, &app.pool)
+    let session = app.sessions.get_session_data(&session_id)?;
+    services::remove_user_link(&session.user_id, &alias, &app.pool)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "service error");

@@ -63,7 +63,7 @@ export function UserView() {
       notifyOk("Logged in!");
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Internal error";
-      const notifyReason = action === "register" ? "Could not register" : "Could not login";
+      const notifyReason = action === "register" ? "Could not create an account" : "Could not login";
       notifyErr(notifyReason, errMsg);
     } finally {
       setWaiting(false);

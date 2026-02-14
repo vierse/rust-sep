@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, header::LOCATION},
     response::Response,
 };
 use serde::de::DeserializeOwned;
@@ -11,7 +11,13 @@ use tower::ServiceExt;
 
 use axum::Router;
 
-use url_shorten::{api, app};
+use url_shorten::{
+    api::{
+        self,
+        handlers::{EXPIRY_DAYS, UNLOCK_PATH},
+    },
+    app,
+};
 
 // Deserialize a Response into T
 async fn json<T: DeserializeOwned>(response: Response) -> T {
@@ -58,7 +64,7 @@ async fn shorten_and_redirect(pool: PgPool) {
 
     assert_eq!(
         response.status(),
-        StatusCode::PERMANENT_REDIRECT,
+        StatusCode::TEMPORARY_REDIRECT,
         "Redirect request to /r/{alias} failed"
     );
     // Check that the redirect location is set to our url
@@ -108,7 +114,7 @@ async fn save_named_and_redirect(pool: PgPool) {
 
     assert_eq!(
         response.status(),
-        StatusCode::PERMANENT_REDIRECT,
+        StatusCode::TEMPORARY_REDIRECT,
         "Redirect request to /r/{alias} failed"
     );
     // Check that the redirect location is set to our url
@@ -209,7 +215,7 @@ async fn redirect_expired_link(pool: PgPool) {
 
     let expired_on = OffsetDateTime::now_utc()
         .date()
-        .saturating_sub(Duration::days(31));
+        .saturating_sub(Duration::days(EXPIRY_DAYS + 1));
 
     sqlx::query!(
         r#"
@@ -240,64 +246,89 @@ async fn redirect_expired_link(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn password_protected_link_redirect(pool: PgPool) {
+async fn password_protected_link_unlock(pool: PgPool) {
     const TEST_URL: &str = "https://example.com";
-    const TEST_ALIAS: &str = "secretlink";
-    const TEST_PASSWORD: &str = "mysecret123";
+    const TEST_ALIAS: &str = "testing";
+    const TEST_PASSWORD: &str = "password123";
 
     let router = router(pool).await;
 
-    // Create a password-protected link
+    // 1. Create a password-protected link
     let request_body = Body::from(
-        serde_json::to_vec(
-            &json!({"url": TEST_URL, "name": TEST_ALIAS, "password": TEST_PASSWORD}),
-        )
+        serde_json::to_vec(&json!({
+            "url": TEST_URL,
+            "name": TEST_ALIAS,
+            "password": TEST_PASSWORD
+        }))
         .unwrap(),
     );
+
     let request = Request::post("/api/shorten")
         .header("content-type", "application/json")
         .body(request_body)
         .unwrap();
+
     let response = router.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::CREATED);
 
-    // Redirect without password should redirect to SPA prompt
+    // 2. Normal redirect should redirect to unlock prompt
     let request = Request::get(format!("/r/{TEST_ALIAS}"))
         .body(Body::empty())
         .unwrap();
+
     let response = router.clone().oneshot(request).await.unwrap();
     assert_eq!(
         response.status(),
         StatusCode::TEMPORARY_REDIRECT,
-        "Expected 307 redirect to prompt when no password provided"
+        "Expected 307 redirect to unlock prompt for protected link"
     );
 
-    // Redirect with wrong password should fail with 401
-    let request = Request::get(format!("/r/{TEST_ALIAS}?password=wrongpass"))
-        .body(Body::empty())
+    let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
+    assert_eq!(
+        location,
+        format!("/{}/{}", UNLOCK_PATH, TEST_ALIAS),
+        "Expected Location header to point to unlock prompt"
+    );
+
+    // 3. POST unlock with wrong password
+    let request_body = Body::from(serde_json::to_vec(&json!({ "password": "qwerty" })).unwrap());
+
+    let request = Request::post(format!("/api/unlock/{TEST_ALIAS}"))
+        .header("content-type", "application/json")
+        .body(request_body)
         .unwrap();
+
     let response = router.clone().oneshot(request).await.unwrap();
     assert_eq!(
         response.status(),
         StatusCode::UNAUTHORIZED,
-        "Expected 401 when wrong password provided"
+        "Expected 401 when provided with wrong password"
     );
 
-    // Redirect with correct password should succeed
-    let request = Request::get(format!("/r/{TEST_ALIAS}?password={TEST_PASSWORD}"))
-        .body(Body::empty())
+    // 4. POST unlock with correct password
+    let request_body =
+        Body::from(serde_json::to_vec(&json!({ "password": TEST_PASSWORD })).unwrap());
+
+    let request = Request::post(format!("/api/unlock/{TEST_ALIAS}"))
+        .header("content-type", "application/json")
+        .body(request_body)
         .unwrap();
+
     let response = router.clone().oneshot(request).await.unwrap();
     assert_eq!(
         response.status(),
-        StatusCode::PERMANENT_REDIRECT,
-        "Expected redirect when correct password provided"
+        StatusCode::OK,
+        "Expected 200 OK when provided with correct password"
     );
+
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
     assert_eq!(
-        response
-            .headers()
-            .get(axum::http::header::LOCATION)
-            .unwrap(),
-        TEST_URL,
+        body.get("url").and_then(|v| v.as_str()),
+        Some(TEST_URL),
+        "Expected unlock endpoint to return target url"
     );
 }
