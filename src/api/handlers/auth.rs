@@ -9,12 +9,10 @@ use cookie::{Cookie, SameSite};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api::{
-        auth::{MaybeUser, RequireUser},
-        error::ApiError,
-    },
-    app::{AppState, usage_metrics::Category},
+    api::{error::ApiError, extract::RequireUser},
+    app::AppState,
     services,
+    usage_metrics::Category,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -35,40 +33,31 @@ impl IntoResponse for AuthResponse {
 }
 
 pub async fn authenticate_session(
-    RequireUser(user_id): RequireUser,
+    RequireUser(session_id): RequireUser,
     State(app): State<AppState>,
 ) -> Result<Response<Body>, ApiError> {
     app.usage_metrics.log(Category::AuthenticateSession);
-    let user = app.sessions.get_user(user_id)?;
+    let session = app.sessions.get_session_data(&session_id)?;
     Ok(AuthResponse {
-        username: user.name().to_string(),
+        username: session.username.clone(),
     }
     .into_response())
 }
 
 pub async fn authenticate_user(
-    MaybeUser(user_id): MaybeUser,
     State(app): State<AppState>,
     Json(AuthRequest { username, password }): Json<AuthRequest>,
 ) -> Result<Response<Body>, ApiError> {
     app.usage_metrics.log(Category::AuthenticateUser);
     // TODO: validate length
-
-    if user_id.is_some() {
-        return Err(ApiError::public(
-            StatusCode::BAD_REQUEST,
-            "Already signed in",
-        ));
-    }
-
     let user = services::authenticate_user(&username, &password, &app.hasher, &app.pool)
         .await
         .map_err(|e| {
-            tracing::error!(error = %e, "Faield to authenticate");
+            tracing::error!(error = %e, "Failed to authenticate");
             ApiError::internal()
         })?;
 
-    let session_id = app.sessions.new_session(user);
+    let session_id = app.sessions.new_session(&user);
 
     let cookie = Cookie::build(("sid", session_id.as_str()))
         .path("/")
@@ -86,18 +75,10 @@ pub async fn authenticate_user(
 }
 
 pub async fn create_user(
-    MaybeUser(user): MaybeUser,
     State(app): State<AppState>,
     Json(AuthRequest { username, password }): Json<AuthRequest>,
 ) -> Result<Response<Body>, ApiError> {
     // TODO: validate length
-
-    if user.is_some() {
-        return Err(ApiError::public(
-            StatusCode::BAD_REQUEST,
-            "Already signed in",
-        ));
-    }
 
     let Some(user) = services::create_user(&username, &password, &app.hasher, &app.pool)
         .await
@@ -112,7 +93,7 @@ pub async fn create_user(
         ));
     };
 
-    let session_id = app.sessions.new_session(user);
+    let session_id = app.sessions.new_session(&user);
 
     let cookie = Cookie::build(("sid", session_id.as_str()))
         .path("/")
