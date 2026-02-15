@@ -14,9 +14,8 @@ use crate::{
     api::{self, Sessions},
     config::Settings,
     domain::MIN_ALIAS_LENGTH,
-    metrics::Metrics,
     scheduler::Scheduler,
-    tasks,
+    tasks::link_metrics::{self, LinkMetrics},
 };
 
 #[derive(Debug, Clone)]
@@ -31,8 +30,8 @@ pub struct CachedLink {
 pub struct AppState {
     pub pool: PgPool,
     pub sqids: Arc<Sqids>,
-    pub metrics: Arc<Metrics>,
     pub usage_metrics: Arc<usage_metrics::Metrics>,
+    pub metrics: Arc<LinkMetrics>,
     pub cache: Cache<String, Option<CachedLink>>,
     pub sessions: Sessions,
     pub hasher: Arc<Argon2<'static>>,
@@ -56,11 +55,11 @@ pub async fn connect_to_db(database_url: &str) -> Result<PgPool> {
 }
 
 pub fn build_test_app_state(pool: PgPool) -> Result<AppState> {
-    let metrics = Arc::new(Metrics::new());
+    let metrics = Arc::new(LinkMetrics::new());
     build_app_state(pool, metrics)
 }
 
-pub fn build_app_state(pool: PgPool, metrics: Arc<Metrics>) -> Result<AppState> {
+pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppState> {
     // Shuffled alphabet for Sqids to generate ids from
     const ALPHABET: &str = "79Hr0JZijqWTnxhgoDEKMRpX4FNIfywG3e6LcldO5bCUYSBPa81s2QAumtzVvk";
 
@@ -88,7 +87,7 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<Metrics>) -> Result<AppState> 
 pub async fn run(config: Settings) -> Result<()> {
     let pool = connect_to_db(config.database_url.as_str()).await?;
 
-    let metrics = Arc::new(Metrics::new());
+    let metrics = Arc::new(LinkMetrics::new());
 
     let state = build_app_state(pool.clone(), metrics.clone())?;
     let router = api::build_router(state);
@@ -104,14 +103,14 @@ pub async fn run(config: Settings) -> Result<()> {
         Scheduler::SECONDS_IN_DAY,
         "daily_partition",
         pool.clone(),
-        |p| async move { tasks::create_daily_partitions(p).await },
+        |p| async move { link_metrics::create_partitions_task(p).await },
     );
 
     scheduler.spawn_task(
         15,
         "daily_metrics",
         (pool.clone(), metrics.clone()),
-        |(p, m)| async move { tasks::process_daily_metrics(p, m).await },
+        |(p, m)| async move { link_metrics::process_batch_task(p, m).await },
     );
 
     let cancel_main = CancellationToken::new();
