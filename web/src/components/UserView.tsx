@@ -2,7 +2,7 @@ import { Button, Dialog, Flex, IconButton, Inset, Table, Text, TextField } from 
 import { ClipboardIcon, Cross1Icon, PersonIcon } from "@radix-ui/react-icons";
 
 import React from "react";
-import { deleteReq, getReq, postReq } from "../api";
+import { deleteReq, getReq, postEmpty, postReq } from "../api";
 import { clipboardCopy } from "../util";
 import { useNotify } from "./NotifyProvider";
 
@@ -34,6 +34,7 @@ export function UserView() {
       }
     })();
   }, []);
+
   const onSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
 
@@ -56,8 +57,8 @@ export function UserView() {
           ? await postReq<AuthRequest, AuthResponse>("/api/auth/register", body)
           : await postReq<AuthRequest, AuthResponse>("/api/auth/login", body);
 
-      setUser(user.username);
       setOpen(false);
+      setUser(user.username);
       form.reset();
 
       notifyOk("Logged in!");
@@ -65,6 +66,21 @@ export function UserView() {
       const errMsg = err instanceof Error ? err.message : "Internal error";
       const notifyReason = action === "register" ? "Could not create an account" : "Could not login";
       notifyErr(notifyReason, errMsg);
+    } finally {
+      setWaiting(false);
+    }
+  };
+
+  const onLogout = async () => {
+    try {
+      setWaiting(true);
+      await postEmpty("/api/user/logout");
+      notifyOk("Logged out");
+      setUser("");
+      setOpen(false);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Internal error";
+      notifyErr("Could not logout", errMsg);
     } finally {
       setWaiting(false);
     }
@@ -121,8 +137,11 @@ export function UserView() {
             </>
           ) : (
             <>
-              <Dialog.Title>{user}</Dialog.Title>
-              <LinksTable />
+              <Flex align="center" justify="between">
+                <Dialog.Title>{user}</Dialog.Title>
+                <Button loading={waiting} color="red" onClick={onLogout}>Logout</Button>
+              </Flex>
+              {open && <LinksTable />}
             </>
           )}
         </Dialog.Content>

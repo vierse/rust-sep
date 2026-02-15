@@ -16,7 +16,8 @@ pub fn build_router(state: AppState) -> Router {
     // user API (auth required)
     let user_api = Router::new()
         .route("/list", get(handlers::list_user_links))
-        .route("/link/{alias}", delete(handlers::remove_user_link));
+        .route("/link/{alias}", delete(handlers::remove_user_link))
+        .route("/logout", post(handlers::logout));
 
     // auth management API
     let auth_api = Router::new()
@@ -34,13 +35,10 @@ pub fn build_router(state: AppState) -> Router {
 
     // assemble everything
     let api = Router::new()
-        .layer(from_fn_with_state(
-            state.clone(),
-            session::session_manager_mw,
-        ))
         .nest("/api", core_api)
         .route("/r/{alias}", get(handlers::redirect))
-        .with_state(state);
+        .with_state(state.clone())
+        .layer(from_fn_with_state(state, session::session_manager_mw)); // must be last
 
     // merge with assets
     let serve = ServeDir::new(DIST_DIR).fallback(ServeFile::new(format!("{DIST_DIR}/index.html")));
