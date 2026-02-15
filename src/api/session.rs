@@ -73,6 +73,10 @@ impl Sessions {
         }
     }
 
+    pub fn close_session(&self, session_id: &SessionId) -> bool {
+        self.inner.remove(session_id).is_some()
+    }
+
     fn is_active(&self, session_id: &str) -> bool {
         self.inner.contains_key(session_id)
     }
@@ -94,6 +98,9 @@ impl SessionData {
         }
     }
 }
+
+#[derive(Clone, Copy)]
+pub struct ClearSid;
 
 fn parse_session_id(headers: &HeaderMap) -> Option<String> {
     let raw = headers.get(header::COOKIE)?.to_str().ok()?;
@@ -122,6 +129,10 @@ pub async fn session_manager_mw(
     }
 
     let mut res = next.run(req).await;
+
+    if res.extensions().get::<ClearSid>().is_some() {
+        clear = true;
+    }
 
     if clear {
         res.headers_mut().append(

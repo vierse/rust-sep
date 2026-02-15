@@ -3,28 +3,41 @@ function containsJson(res: Response) {
   return ct.includes("application/json");
 }
 
-export async function postReq<RequestType, ResponseType>(
+export async function postEmpty<ResponseType = void>(
   path: string,
-  body: RequestType,
-  signal?: AbortSignal
-): Promise<ResponseType>;
+  signal?: AbortSignal,
+): Promise<ResponseType> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    ...(signal ? { signal } : {}),
+  });
 
-export async function postReq<RequestType>(
-  path: string,
-  body: RequestType,
-  signal?: AbortSignal
-): Promise<void>;
+  if (!res.ok) {
+    let reason = `Request error (${res.status})`;
+    try {
+      const err = await res.json();
+      if (typeof err === "string") reason = err;
+    } catch {
+      // ignore
+    }
+    throw new Error(reason);
+  }
 
-export async function postReq<RequestType, ResponseType>(
+  if (containsJson(res)) return (await res.json()) as ResponseType;
+  return undefined as ResponseType;
+}
+
+export async function postReq<RequestType, ResponseType = void>(
   path: string,
   body: RequestType,
   signal?: AbortSignal
-): Promise<ResponseType | void> {
+): Promise<ResponseType> {
   const res = await fetch(path, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Accept": "application/json",
+      Accept: "application/json",
     },
     body: JSON.stringify(body),
     ...(signal ? { signal } : {}),
@@ -32,14 +45,12 @@ export async function postReq<RequestType, ResponseType>(
 
   if (!res.ok) {
     let reason = `Request error (${res.status})`;
-
     try {
       const err = await res.json();
       if (typeof err === "string") reason = err;
     } catch {
       // ignore
     }
-
     throw new Error(reason);
   }
 
@@ -47,7 +58,7 @@ export async function postReq<RequestType, ResponseType>(
     return (await res.json()) as ResponseType;
   }
 
-  return;
+  return undefined as ResponseType;
 }
 
 export async function getReq<ResponseType>(

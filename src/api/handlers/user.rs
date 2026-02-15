@@ -6,7 +6,7 @@ use axum::{
 };
 
 use crate::{
-    api::{error::ApiError, extract::RequireUser},
+    api::{error::ApiError, extract::RequireUser, session::ClearSid},
     app::AppState,
     services::{self, query_links_by_user_id},
 };
@@ -40,4 +40,15 @@ pub async fn remove_user_link(
         })?;
 
     Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+pub async fn logout(
+    RequireUser(session_id): RequireUser,
+    State(app): State<AppState>,
+) -> Result<Response, ApiError> {
+    app.sessions.close_session(&session_id);
+
+    let mut res = StatusCode::NO_CONTENT.into_response();
+    res.extensions_mut().insert(ClearSid);
+    Ok(res)
 }

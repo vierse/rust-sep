@@ -38,6 +38,8 @@ pub async fn authenticate_session(
 ) -> Result<Response<Body>, ApiError> {
     app.usage_metrics.log(Category::AuthenticateSession);
     let session = app.sessions.get_session_data(&session_id)?;
+
+    println!("Logging out");
     Ok(AuthResponse {
         username: session.username.clone(),
     }
