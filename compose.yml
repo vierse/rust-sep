@@ -78,7 +78,7 @@ services:
   locust:
     image: locustio/locust
     volumes:
-      - ./tests/locust:/mnt/locust:ro
+      - ./locust:/mnt/locust:ro
     working_dir: /mnt/locust
     restart: no
     ports:
