@@ -61,7 +61,6 @@ async fn fetch_link(alias: &str, app: &AppState) -> Result<CachedLink, ApiError>
     if link.last_seen < today.saturating_sub(Duration::days(EXPIRY_DAYS)) {
         return Err(ApiError::public(StatusCode::GONE, "The link has expired"));
     }
-    // TODO: mark the expired link for cleanup
 
     Ok(link)
 }

@@ -15,7 +15,10 @@ use crate::{
     config::Settings,
     domain::MIN_ALIAS_LENGTH,
     scheduler::Scheduler,
-    tasks::link_metrics::{self, LinkMetrics},
+    tasks::{
+        link_cleanup,
+        link_metrics::{self, LinkMetrics},
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -71,7 +74,10 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
             .build()?,
     );
 
-    let cache: Cache<String, Option<CachedLink>> = Cache::new(1_000);
+    let cache: Cache<String, Option<CachedLink>> = Cache::builder()
+        .time_to_idle(Duration::from_secs(60 * 60 * 24))
+        .max_capacity(1_000)
+        .build();
 
     Ok(AppState {
         pool,
@@ -111,6 +117,13 @@ pub async fn run(config: Settings) -> Result<()> {
         "daily_metrics",
         (pool.clone(), metrics.clone()),
         |(p, m)| async move { link_metrics::process_batch_task(p, m).await },
+    );
+
+    scheduler.spawn_task(
+        Scheduler::SECONDS_IN_DAY,
+        "link_cleanup",
+        pool.clone(),
+        |p| async move { link_cleanup::link_cleanup_task(p).await },
     );
 
     let cancel_main = CancellationToken::new();
