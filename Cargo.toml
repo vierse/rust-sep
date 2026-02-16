@@ -6,7 +6,6 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0"
-async-trait = "0.1.89"
 axum = { version = "0.8.7", features = ["macros"] }
 base64 = "0.22"
 config = "0.15"
@@ -18,17 +17,15 @@ tower-http = { version = "0.6.8", features = ["fs"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 serde = { version = "1.0", features = ["derive"] }
-sqlx = { version = "0.8", features = [ "runtime-tokio", "postgres", "macros", "time", "chrono" ] }
+sqlx = { version = "0.8", features = [ "runtime-tokio", "postgres", "macros", "time" ] }
 url = "2.5.7"
 sqids = "0.4.2"
 time = { version = "0.3", features = ["macros", "formatting"] }
 dashmap = "6.1.0"
 arc-swap = "1.8.0"
-chrono = "0.4.43"
 moka = { version = "0.12.12", features = ["future"] }
 rand_core = { version = "0.6", features = ["std"] }
 argon2 = "0.5"
-jsonwebtoken = "9"
 
 [dev-dependencies]
 tower = { version = "0.5.1", features = ["full"] }

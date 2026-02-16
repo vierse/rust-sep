@@ -102,7 +102,6 @@ pub async fn process_batch_task(pool: PgPool, metrics: Arc<LinkMetrics>) -> Resu
     let mut last_access_col: Vec<OffsetDateTime> = Vec::with_capacity(CHUNK_SIZE);
 
     let mut entries_updated = 0usize;
-
     for entry in map.iter() {
         let link_id = *entry.key();
         let val = entry.value();
@@ -228,4 +227,16 @@ pub async fn create_partitions_task(pool: PgPool) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn date_formatting() {
+        let date = time::macros::date!(2026 - 01 - 19);
+        assert_eq!(date.format(&PART_NAME_DATE_FD).unwrap(), "20260119");
+        assert_eq!(date.format(&ISO_DATE_FD).unwrap(), "2026-01-19");
+    }
 }
