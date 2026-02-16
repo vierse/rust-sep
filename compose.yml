@@ -32,6 +32,11 @@ services:
     ports:
       - "${APP_PORT}:${APP_PORT}"
     restart: unless-stopped
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 20000
+        hard: 40000
 
   postgres:
     image: postgres:18

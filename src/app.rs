@@ -1,4 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use argon2::Argon2;
@@ -16,7 +22,7 @@ use crate::{
     domain::MIN_ALIAS_LENGTH,
     scheduler::Scheduler,
     tasks::{
-        link_cleanup,
+        diag, link_cleanup,
         link_metrics::{self, LinkMetrics},
     },
 };
@@ -38,12 +44,40 @@ pub struct AppState {
     pub cache: Cache<String, Option<CachedLink>>,
     pub sessions: Sessions,
     pub hasher: Arc<Argon2<'static>>,
+    pub diag: Arc<Diag>,
 }
 
+#[derive(Default)]
+pub struct Diag {
+    cache_hit: AtomicU64,
+    cache_miss: AtomicU64,
+}
+
+impl Diag {
+    #[inline]
+    pub fn cache_hit(&self) {
+        self.cache_hit.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub fn cache_miss(&self) {
+        self.cache_miss.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn snapshot(&self) -> (u64, u64) {
+        (
+            self.cache_hit.load(Ordering::Relaxed),
+            self.cache_miss.load(Ordering::Relaxed),
+        )
+    }
+}
 pub async fn connect_to_db(database_url: &str) -> Result<PgPool> {
     // Connect to database
     let pool = PgPoolOptions::new()
-        .acquire_timeout(Duration::from_secs(5))
+        .min_connections(8)
+        .max_connections(32)
+        .max_lifetime(Duration::from_hours(1))
+        .acquire_timeout(Duration::from_secs(15))
         .connect(database_url)
         .await
         .context("Failed to connect to database")?;
@@ -76,7 +110,7 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
 
     let cache: Cache<String, Option<CachedLink>> = Cache::builder()
         .time_to_idle(Duration::from_secs(60 * 60 * 24))
-        .max_capacity(1_000)
+        .max_capacity(3_000)
         .build();
 
     Ok(AppState {
@@ -87,6 +121,7 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
         sessions: Sessions::default(),
         hasher: Arc::new(Argon2::default()),
         usage_metrics: Default::default(),
+        diag: Arc::new(Diag::default()),
     })
 }
 
@@ -96,6 +131,7 @@ pub async fn run(config: Settings) -> Result<()> {
     let metrics = Arc::new(LinkMetrics::new());
 
     let state = build_app_state(pool.clone(), metrics.clone())?;
+    let diag = state.diag.clone();
     let router = api::build_router(state);
 
     let addr = format!("0.0.0.0:{}", config.port);
@@ -125,6 +161,10 @@ pub async fn run(config: Settings) -> Result<()> {
         pool.clone(),
         |p| async move { link_cleanup::link_cleanup_task(p).await },
     );
+
+    scheduler.spawn_task(5, "diag", diag, |d| async move {
+        diag::print_diagnostics_task(d).await
+    });
 
     let cancel_main = CancellationToken::new();
     let server_handle = {

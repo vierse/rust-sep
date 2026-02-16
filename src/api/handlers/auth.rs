@@ -10,9 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     api::{error::ApiError, extract::RequireUser},
-    app::AppState,
+    app::{AppState, usage_metrics::Category},
     services,
-    usage_metrics::Category,
 };
 
 #[derive(Serialize, Deserialize)]
