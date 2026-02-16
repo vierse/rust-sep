@@ -43,14 +43,19 @@ async fn fetch_link(alias: &str, app: &AppState) -> Result<CachedLink, ApiError>
         return Err(ApiError::internal());
     }
 
-    let link_opt = app
-        .cache
-        .try_get_with_by_ref(alias, services::query_url_by_alias(alias, &app.pool))
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "failed to query the url");
-            ApiError::internal()
-        })?;
+    let link_opt = if let Some(link) = app.cache.get(alias).await {
+        app.diag.cache_hit();
+        link
+    } else {
+        app.diag.cache_miss();
+        app.cache
+            .try_get_with_by_ref(alias, services::query_url_by_alias(alias, &app.pool))
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "failed to query the url");
+                ApiError::internal()
+            })?
+    };
 
     let link = link_opt.ok_or_else(|| {
         tracing::debug!("alias not found: {alias}");
