@@ -80,7 +80,6 @@ impl MetricsDay {
             .hours
             .iter()
             .map(|h| h.categories[cat as usize].load(Ordering::Relaxed))
-            .into_iter()
             .enumerate()
             .max_by_key(|(_, reds)| *reds)
             .unwrap();
@@ -93,7 +92,6 @@ impl MetricsDay {
             .hours
             .iter()
             .map(|h| h.sum())
-            .into_iter()
             .enumerate()
             .max_by_key(|(_, reds)| *reds)
             .unwrap();
