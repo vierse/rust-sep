@@ -38,7 +38,7 @@ pub async fn authenticate_session(
     RequireUser(user_id): RequireUser,
     State(app): State<AppState>,
 ) -> Result<Response<Body>, ApiError> {
-    app.usage_metrics.log(Category::AuthenticateSession).await;
+    app.usage_metrics.log(Category::AuthenticateSession);
     let user = app.sessions.get_user(user_id)?;
     Ok(AuthResponse {
         username: user.name().to_string(),
@@ -51,7 +51,7 @@ pub async fn authenticate_user(
     State(app): State<AppState>,
     Json(AuthRequest { username, password }): Json<AuthRequest>,
 ) -> Result<Response<Body>, ApiError> {
-    app.usage_metrics.log(Category::AuthenticateUser).await;
+    app.usage_metrics.log(Category::AuthenticateUser);
     // TODO: validate length
 
     if user_id.is_some() {
