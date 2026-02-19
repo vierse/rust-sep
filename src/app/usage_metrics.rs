@@ -59,7 +59,7 @@ impl Metrics {
 }
 
 impl MetricsDay {
-    pub fn avg_hourly_redirects(&self, cat: Category) -> f64 {
+    pub fn avg_hourly_hits_in(&self, cat: Category) -> f64 {
         self.total_usage_in(cat) as f64 / self.hours.len() as f64
     }
 
