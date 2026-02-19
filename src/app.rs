@@ -76,7 +76,7 @@ pub async fn connect_to_db(database_url: &str) -> Result<PgPool> {
     let pool = PgPoolOptions::new()
         .min_connections(8)
         .max_connections(32)
-        .max_lifetime(Duration::from_hours(1))
+        .max_lifetime(Duration::from_secs(60 * 60))
         .acquire_timeout(Duration::from_secs(15))
         .connect(database_url)
         .await
