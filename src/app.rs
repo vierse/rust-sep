@@ -32,7 +32,7 @@ pub struct AppState {
     pub pool: PgPool,
     pub sqids: Arc<Sqids>,
     pub metrics: Arc<Metrics>,
-    pub usage_metrics: std::sync::Arc<usage_metrics::Metrics>,
+    pub usage_metrics: Arc<usage_metrics::Metrics>,
     pub cache: Cache<String, Option<CachedLink>>,
     pub sessions: Arc<Sessions>,
     pub hasher: Arc<Argon2<'static>>,
