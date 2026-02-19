@@ -3,11 +3,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use const_format::formatcp;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     api::session::SessionError,
-    domain::{AliasParseError, UrlParseError},
+    domain::{Alias, AliasParseError, CredentialsError, UrlParseError, UserName, UserPassword},
+    services::{LinkServiceError, ServiceError},
 };
 
 pub struct ApiError {
@@ -48,9 +50,39 @@ impl ApiError {
     }
 }
 
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        (self.status_code, Json(ApiErrorBody(self.reason))).into_response()
+    }
+}
+
+impl From<ServiceError> for ApiError {
+    fn from(error: ServiceError) -> Self {
+        match error {
+            ServiceError::LinkServiceError(err) => err.into(),
+            _ => {
+                // propagated internal errors will be logged here
+                tracing::error!(error = %error, "internal error: ");
+                Self::internal()
+            }
+        }
+    }
+}
+
+impl From<LinkServiceError> for ApiError {
+    fn from(error: LinkServiceError) -> Self {
+        match error {
+            LinkServiceError::AlreadyExists => {
+                Self::public(StatusCode::CONFLICT, "This alias already exists")
+            }
+            LinkServiceError::NotFound => Self::not_found(),
+        }
+    }
+}
+
 impl From<SessionError> for ApiError {
     fn from(_error: SessionError) -> Self {
-        // TODO: some errors will be relevant for user once frontend notifications are complete
+        // TODO: expired session errors might be relevant to user
         Self::internal()
     }
 }
@@ -80,12 +112,20 @@ impl From<UrlParseError> for ApiError {
 impl From<AliasParseError> for ApiError {
     fn from(error: AliasParseError) -> Self {
         match error {
-            AliasParseError::TooShort => {
-                Self::public(StatusCode::BAD_REQUEST, "Chosen link is too short")
-            }
-            AliasParseError::TooLong => {
-                Self::public(StatusCode::BAD_REQUEST, "Chosen link is too long")
-            }
+            AliasParseError::TooShort => Self::public(
+                StatusCode::BAD_REQUEST,
+                formatcp!(
+                    "Chosen link must be at least {} characters",
+                    Alias::MIN_ALIAS_LENGTH
+                ),
+            ),
+            AliasParseError::TooLong => Self::public(
+                StatusCode::BAD_REQUEST,
+                formatcp!(
+                    "Chosen link cannot contain more than {} characters",
+                    Alias::MAX_ALIAS_LENGTH
+                ),
+            ),
             AliasParseError::InvalidCharacters => Self::public(
                 StatusCode::BAD_REQUEST,
                 "Chosen link contains invalid characters",
@@ -94,8 +134,45 @@ impl From<AliasParseError> for ApiError {
     }
 }
 
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        (self.status_code, Json(ApiErrorBody(self.reason))).into_response()
+impl From<CredentialsError> for ApiError {
+    fn from(error: CredentialsError) -> Self {
+        match error {
+            CredentialsError::UsernameInvalidChars => ApiError::public(
+                StatusCode::BAD_REQUEST,
+                "Username contains invalid characters",
+            ),
+            CredentialsError::UsernameTooShort => ApiError::public(
+                StatusCode::BAD_REQUEST,
+                formatcp!(
+                    "Username must be at least {} characters",
+                    UserName::MIN_USERNAME_LENGTH
+                ),
+            ),
+            CredentialsError::UsernameTooLong => ApiError::public(
+                StatusCode::BAD_REQUEST,
+                formatcp!(
+                    "Username cannot be longer than {} characters",
+                    UserName::MAX_USERNAME_LENGTH
+                ),
+            ),
+            CredentialsError::PasswordInvalidChars => ApiError::public(
+                StatusCode::BAD_REQUEST,
+                "Password contains invalid characters",
+            ),
+            CredentialsError::PasswordTooShort => ApiError::public(
+                StatusCode::BAD_REQUEST,
+                formatcp!(
+                    "Password must contain at least {} characters",
+                    UserPassword::MIN_PASSWORD_LENGTH
+                ),
+            ),
+            CredentialsError::PasswordTooLong => ApiError::public(
+                StatusCode::BAD_REQUEST,
+                formatcp!(
+                    "Password cannot be longer than {} characters",
+                    UserPassword::MAX_PASSWORD_LENGTH
+                ),
+            ),
+        }
     }
 }

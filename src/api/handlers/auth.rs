@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     api::{error::ApiError, extract::RequireUser},
     app::{AppState, usage_metrics::Category},
+    domain::{UserName, UserPassword},
     services,
 };
 
@@ -59,17 +60,18 @@ pub async fn authenticate_user(
     Json(AuthRequest { username, password }): Json<AuthRequest>,
 ) -> Result<Response<Body>, ApiError> {
     app.usage_metrics.log(Category::AuthenticateUser);
-    // TODO: validate length
-    let user = services::authenticate_user(&username, &password, &app.hasher, &app.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to authenticate");
-            ApiError::internal()
-        })?;
+
+    let username: UserName = username.try_into()?;
+    let password: UserPassword = password.try_into()?;
+
+    let user = services::authenticate_user(username, password, &app.hasher, &app.pool).await?;
 
     let session_id = app.sessions.new_session(&user);
 
-    let mut response = AuthResponse { username }.into_response();
+    let mut response = AuthResponse {
+        username: user.name().to_string(),
+    }
+    .into_response();
     response
         .headers_mut()
         .append(header::SET_COOKIE, build_cookie_header(session_id.as_str()));
@@ -81,14 +83,10 @@ pub async fn create_user(
     State(app): State<AppState>,
     Json(AuthRequest { username, password }): Json<AuthRequest>,
 ) -> Result<Response<Body>, ApiError> {
-    // TODO: validate length
+    let username: UserName = username.try_into()?;
+    let password: UserPassword = password.try_into()?;
 
-    let Some(user) = services::create_user(&username, &password, &app.hasher, &app.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to create user account");
-            ApiError::internal()
-        })?
+    let Some(user) = services::create_user(username, password, &app.hasher, &app.pool).await?
     else {
         return Err(ApiError::public(
             StatusCode::BAD_REQUEST,
@@ -98,7 +96,10 @@ pub async fn create_user(
 
     let session_id = app.sessions.new_session(&user);
 
-    let mut response = AuthResponse { username }.into_response();
+    let mut response = AuthResponse {
+        username: user.name().to_string(),
+    }
+    .into_response();
     response
         .headers_mut()
         .append(header::SET_COOKIE, build_cookie_header(session_id.as_str()));

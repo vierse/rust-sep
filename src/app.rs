@@ -19,7 +19,7 @@ pub mod usage_metrics;
 use crate::{
     api::{self, Sessions},
     config::Settings,
-    domain::MIN_ALIAS_LENGTH,
+    domain::Alias,
     scheduler::Scheduler,
     tasks::{
         diag, link_cleanup,
@@ -41,7 +41,7 @@ pub struct AppState {
     pub sqids: Arc<Sqids>,
     pub usage_metrics: Arc<usage_metrics::Metrics>,
     pub metrics: Arc<LinkMetrics>,
-    pub cache: Cache<String, Option<CachedLink>>,
+    pub cache: Cache<Alias, Option<CachedLink>>,
     pub sessions: Sessions,
     pub hasher: Arc<Argon2<'static>>,
     pub diag: Arc<Diag>,
@@ -103,12 +103,12 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
     // Initialize Sqids generator
     let sqids = Arc::new(
         Sqids::builder()
-            .min_length(MIN_ALIAS_LENGTH as u8)
+            .min_length(Alias::MIN_ALIAS_LENGTH as u8)
             .alphabet(ALPHABET.chars().collect())
             .build()?,
     );
 
-    let cache: Cache<String, Option<CachedLink>> = Cache::builder()
+    let cache: Cache<Alias, Option<CachedLink>> = Cache::builder()
         .time_to_idle(Duration::from_secs(60 * 60 * 24))
         .max_capacity(3_000)
         .build();

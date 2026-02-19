@@ -20,8 +20,20 @@ pub enum UrlParseError {
 }
 
 impl Url {
-    pub fn parse(input: &str) -> Result<Self, UrlParseError> {
-        let url = UrlParser::parse(input).map_err(UrlParseError::Invalid)?;
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+impl TryFrom<String> for Url {
+    type Error = UrlParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let url = UrlParser::parse(&value).map_err(UrlParseError::Invalid)?;
 
         let scheme = url.scheme();
         if scheme != "http" && scheme != "https" {
@@ -46,15 +58,7 @@ impl Url {
             return Err(UrlParseError::BlockedHost(url_domain.to_string()));
         }
 
-        Ok(Self(input.to_string()))
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn into_string(self) -> String {
-        self.0
+        Ok(Url(value))
     }
 }
 
@@ -72,7 +76,7 @@ mod test {
         ];
 
         for url in urls {
-            let result = Url::parse(url);
+            let result: Result<Url, _> = url.to_string().try_into();
             assert!(
                 result.is_ok(),
                 "{} should be allowed, instead: {:?}",
@@ -107,7 +111,7 @@ mod test {
         ];
 
         for url in urls {
-            let result = Url::parse(url);
+            let result: Result<Url, _> = url.to_string().try_into();
             assert!(
                 result.is_err(),
                 "{} should not be allowed, instead: {:?}",
@@ -120,7 +124,10 @@ mod test {
     #[test]
     fn saved_url_format() {
         let test_url = "https://example.com";
-        let url = Url::parse(test_url).expect("Could not parse the URL");
+        let url: Url = test_url
+            .to_string()
+            .try_into()
+            .expect("Could not parse the URL");
         assert_eq!(test_url, url.as_str(), "Saved URL does not match the input");
     }
 }
