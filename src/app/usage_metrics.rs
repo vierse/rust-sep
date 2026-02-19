@@ -99,14 +99,18 @@ impl MetricsDay {
         idx
     }
 
-    /// returns the usage a category in an hour /  total_occurances
+    /// returns the usage a category in an hour / total_occurances
     pub fn usage_frequency_in(&self, hour: usize, cat: Category) -> anyhow::Result<f64> {
         anyhow::ensure!(hour < self.hours.len(), "given hour doesn't fit in a day");
 
-        Ok(
-            self.hours[hour].categories[cat as usize].load(Ordering::Relaxed) as f64
-                / self.total_usage_in(cat) as f64,
-        )
+        let total_usage = self.total_usage_in(cat) as f64;
+
+        anyhow::ensure!(
+            total_usage > 0.,
+            "there haven't been any hits of the given category logged yet"
+        );
+
+        Ok(self.hours[hour].categories[cat as usize].load(Ordering::Relaxed) as f64 / total_usage)
     }
 
     pub fn usage(&self, hour: usize, cat: Category) -> anyhow::Result<usize> {
