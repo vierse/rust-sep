@@ -31,6 +31,16 @@ impl IntoResponse for AuthResponse {
     }
 }
 
+fn build_cookie_header(sid: &str) -> HeaderValue {
+    let cookie = Cookie::build(("sid", sid))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .secure(false); // no https for now
+
+    HeaderValue::from_str(&cookie.to_string()).expect("Could not build a cookie")
+}
+
 pub async fn authenticate_session(
     RequireUser(session_id): RequireUser,
     State(app): State<AppState>,
@@ -59,17 +69,10 @@ pub async fn authenticate_user(
 
     let session_id = app.sessions.new_session(&user);
 
-    let cookie = Cookie::build(("sid", session_id.as_str()))
-        .path("/")
-        .http_only(true)
-        .same_site(SameSite::Lax)
-        .secure(false); // no https for now
-
     let mut response = AuthResponse { username }.into_response();
-    response.headers_mut().append(
-        header::SET_COOKIE,
-        HeaderValue::from_str(&cookie.to_string()).unwrap(),
-    );
+    response
+        .headers_mut()
+        .append(header::SET_COOKIE, build_cookie_header(session_id.as_str()));
 
     Ok(response)
 }
@@ -95,17 +98,10 @@ pub async fn create_user(
 
     let session_id = app.sessions.new_session(&user);
 
-    let cookie = Cookie::build(("sid", session_id.as_str()))
-        .path("/")
-        .http_only(true)
-        .same_site(SameSite::Lax)
-        .secure(false); // no https for now
-
     let mut response = AuthResponse { username }.into_response();
-    response.headers_mut().append(
-        header::SET_COOKIE,
-        HeaderValue::from_str(&cookie.to_string()).unwrap(),
-    );
+    response
+        .headers_mut()
+        .append(header::SET_COOKIE, build_cookie_header(session_id.as_str()));
 
     Ok(response)
 }
