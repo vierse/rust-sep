@@ -25,5 +25,7 @@ pub enum ServiceError {
     #[error("database error {0}")]
     DatabaseError(#[from] sqlx::Error),
     #[error(transparent)]
+    LinkServiceError(#[from] LinkServiceError),
+    #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

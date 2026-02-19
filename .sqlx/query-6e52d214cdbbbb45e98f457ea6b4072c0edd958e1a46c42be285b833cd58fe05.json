@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO links_main (alias, url, user_id, password_hash)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (alias) DO NOTHING\n        RETURNING alias\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "alias",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "6e52d214cdbbbb45e98f457ea6b4072c0edd958e1a46c42be285b833cd58fe05"
+}

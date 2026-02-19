@@ -11,7 +11,7 @@ use time::{Duration, OffsetDateTime};
 use crate::{
     api::{error::ApiError, extract::MaybeUser},
     app::{AppState, CachedLink, usage_metrics::Category},
-    domain::{Alias, MAX_ALIAS_LENGTH, Url},
+    domain::{Alias, Url},
     services,
 };
 
@@ -37,12 +37,7 @@ impl IntoResponse for ShortenResponse {
     }
 }
 
-async fn fetch_link(alias: &str, app: &AppState) -> Result<CachedLink, ApiError> {
-    if alias.len() > MAX_ALIAS_LENGTH {
-        tracing::error!("maximum alias length exceeded");
-        return Err(ApiError::internal());
-    }
-
+async fn fetch_link(alias: &Alias, app: &AppState) -> Result<CachedLink, ApiError> {
     let link_opt = if let Some(link) = app.cache.get(alias).await {
         app.diag.cache_hit();
         link
@@ -57,10 +52,7 @@ async fn fetch_link(alias: &str, app: &AppState) -> Result<CachedLink, ApiError>
             })?
     };
 
-    let link = link_opt.ok_or_else(|| {
-        tracing::debug!("alias not found: {alias}");
-        ApiError::not_found()
-    })?;
+    let link = link_opt.ok_or_else(ApiError::not_found)?;
 
     let today = OffsetDateTime::now_utc().date();
     if link.last_seen < today.saturating_sub(Duration::days(EXPIRY_DAYS)) {
@@ -74,11 +66,15 @@ pub async fn redirect(
     State(app): State<AppState>,
     Path(alias): Path<String>,
 ) -> Result<Redirect, ApiError> {
+    let alias: Alias = alias.try_into()?;
     let link = fetch_link(&alias, &app).await?;
 
     // Redirect to unlock view if the link is protected
     if link.password_hash.is_some() {
-        return Ok(Redirect::temporary(&format!("/{UNLOCK_PATH}/{}", alias)));
+        return Ok(Redirect::temporary(&format!(
+            "/{UNLOCK_PATH}/{}",
+            alias.as_str()
+        )));
     }
 
     // Update metrics
@@ -108,6 +104,7 @@ pub async fn redirect_unlock(
     Path(alias): Path<String>,
     Json(UnlockRequest { password }): Json<UnlockRequest>,
 ) -> Result<UnlockResponse, ApiError> {
+    let alias: Alias = alias.try_into()?;
     let link = fetch_link(&alias, &app).await?;
 
     let Some(password_hash) = link.password_hash else {
@@ -144,10 +141,7 @@ pub async fn shorten(
 ) -> Result<ShortenResponse, ApiError> {
     app.usage_metrics.log(Category::Shorten);
 
-    let url = Url::parse(&url).map_err(|e| {
-        tracing::debug!(error = %e, "url parse error");
-        ApiError::from(e)
-    })?;
+    let url: Url = url.try_into()?;
 
     let mut user_id = None;
 
@@ -161,51 +155,32 @@ pub async fn shorten(
     match name {
         // If request contains an alias, validate and save it
         Some(alias_str) => {
-            let alias = Alias::parse(&alias_str).map_err(|e| {
-                tracing::debug!(error = %e, "alias parse error");
-                ApiError::from(e)
-            })?;
+            let alias: Alias = alias_str.try_into()?;
 
             let result = services::create_link_with_alias(
-                url.as_str(),
-                alias.as_str(),
+                &url,
+                &alias,
                 &app.pool,
                 user_id,
                 password_ref,
                 &app.hasher,
             )
-            .await
-            .map_err(|e| {
-                tracing::error!(error = %e, "service error");
-                ApiError::internal()
-            })?;
+            .await?;
 
-            if !result {
-                tracing::debug!(cause = %alias.as_str(), "alias already taken");
-                return Err(ApiError::public(
-                    StatusCode::CONFLICT,
-                    "This alias is already taken",
-                ));
-            }
-
-            Ok(ShortenResponse { alias: alias_str })
+            Ok(ShortenResponse { alias: result })
         }
 
         // If request does not contain an alias, generate a new one
         None => {
             let alias = services::create_link(
-                url.as_str(),
+                &url,
                 &app.sqids,
                 &app.pool,
                 user_id,
                 password_ref,
                 &app.hasher,
             )
-            .await
-            .map_err(|e| {
-                tracing::error!(error = %e, "service error");
-                ApiError::internal()
-            })?;
+            .await?;
 
             Ok(ShortenResponse { alias })
         }
@@ -215,12 +190,7 @@ pub async fn shorten(
 pub async fn recently_added_links(State(app): State<AppState>) -> Result<Response, ApiError> {
     app.usage_metrics.log(Category::RecentlyAdded);
 
-    let links = services::recently_added_links(10, &app.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "service error");
-            ApiError::internal()
-        })?;
+    let links = services::recently_added_links(10, &app.pool).await?;
 
     Ok((StatusCode::OK, Json(links)).into_response())
 }

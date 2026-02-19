@@ -3,19 +3,31 @@ use argon2::Argon2;
 use serde::Serialize;
 use sqids::Sqids;
 use sqlx::PgPool;
+use thiserror::Error;
 
 use crate::{
     app::CachedLink,
-    domain::{Url, UserId},
+    domain::{Alias, Url, UserId},
     services::ServiceError,
 };
 
 use super::hash_password;
 
+#[derive(Debug, Error)]
+pub enum LinkServiceError {
+    #[error("alias already exists")]
+    AlreadyExists,
+    #[error("alias not found")]
+    NotFound,
+}
+
 /// Create a new link for the provided URL
-#[tracing::instrument(name = "services::create_link", skip(generator, pool, hasher))]
+#[tracing::instrument(
+    name = "services::create_link",
+    skip(generator, pool, password, hasher)
+)]
 pub async fn create_link(
-    url: &str,
+    url: &Url,
     generator: &Sqids,
     pool: &PgPool,
     user_id: Option<UserId>,
@@ -36,7 +48,7 @@ pub async fn create_link(
         VALUES ($1, $2, $3)
         RETURNING id
         "#,
-        url,
+        url.as_str(),
         user_id,
         password_hash_ref,
     )
@@ -79,30 +91,33 @@ pub async fn create_link(
 /// Create a link with user-defined alias for the provided URL
 ///
 /// Returns Ok(false) if the alias is already taken
-#[tracing::instrument(name = "services::create_link_with_alias", skip(pool, hasher))]
+#[tracing::instrument(
+    name = "services::create_link_with_alias",
+    skip(pool, password, hasher)
+)]
 pub async fn create_link_with_alias(
-    url: &str,
-    alias: &str,
+    url: &Url,
+    alias: &Alias,
     pool: &PgPool,
     user_id: Option<UserId>,
     password: Option<&str>,
     hasher: &Argon2<'_>,
-) -> Result<bool, ServiceError> {
+) -> Result<String, ServiceError> {
     let password_hash = password
         .filter(|p| !p.is_empty())
         .map(|p| hash_password(p, hasher))
         .transpose()?;
     let password_hash_ref = password_hash.as_deref();
 
-    let rec = sqlx::query!(
+    let rec_opt = sqlx::query!(
         r#"
         INSERT INTO links_main (alias, url, user_id, password_hash)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (alias) DO NOTHING
-        RETURNING id
+        RETURNING alias
         "#,
-        alias,
-        url,
+        alias.as_str(),
+        url.as_str(),
         user_id,
         password_hash_ref,
     )
@@ -110,7 +125,10 @@ pub async fn create_link_with_alias(
     .await
     .map_err(ServiceError::DatabaseError)?;
 
-    Ok(rec.is_some())
+    match rec_opt {
+        Some(rec) => Ok(rec.alias.unwrap()),
+        None => Err(LinkServiceError::AlreadyExists.into()),
+    }
 }
 
 /// Query url from database
@@ -118,12 +136,12 @@ pub async fn create_link_with_alias(
 /// Returns Ok(None) if the alias does not exist
 #[tracing::instrument(name = "services::query_url_by_alias", skip(pool))]
 pub async fn query_url_by_alias(
-    alias: &str,
+    alias: &Alias,
     pool: &PgPool,
 ) -> Result<Option<CachedLink>, ServiceError> {
     let rec_opt = sqlx::query!(
         r#"SELECT id, url, last_seen, password_hash FROM links_main WHERE alias = $1"#,
-        alias
+        alias.as_str()
     )
     .fetch_optional(pool)
     .await
@@ -131,14 +149,9 @@ pub async fn query_url_by_alias(
 
     rec_opt
         .map(|rec| {
-            let url = Url::parse(&rec.url)
-                .with_context(|| format!("Failed to validate url from {alias}"))
-                .map_err(ServiceError::Other)?
-                .into_string();
-
             Ok(CachedLink {
                 id: rec.id,
-                url,
+                url: rec.url,
                 last_seen: rec.last_seen,
                 password_hash: rec.password_hash,
             })
@@ -186,7 +199,7 @@ pub async fn query_links_by_user_id(
 #[tracing::instrument(name = "services::remove_user_link", skip(pool))]
 pub async fn remove_user_link(
     user_id: &UserId,
-    alias: &str,
+    alias: &Alias,
     pool: &PgPool,
 ) -> Result<(), ServiceError> {
     sqlx::query!(
@@ -196,7 +209,7 @@ pub async fn remove_user_link(
           AND alias = $2
         "#,
         user_id,
-        alias
+        alias.as_str()
     )
     .execute(pool)
     .await
