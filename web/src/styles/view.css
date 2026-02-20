@@ -1,0 +1,12 @@
+.inputField {
+    display: inline-block;
+    border-radius: var(--radius-3);
+}
+
+.inputField[data-status="ok"] {
+    box-shadow: 0 0 0 1px var(--green-9);
+}
+
+.inputField[data-status="err"] {
+    box-shadow: 0 0 0 1px var(--red-9);
+}

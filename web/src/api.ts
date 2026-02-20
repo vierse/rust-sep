@@ -108,7 +108,7 @@ export async function postNoContent<RequestType>(
     let reason = `Request error (${res.status})`;
 
     try {
-      const err = (await res.json()) as ApiErrorBody;
+      const err = (await res.json()) as { reason?: string };
       if (err?.reason) reason = err.reason;
     } catch {
       // ignore

@@ -1,8 +1,8 @@
-import { Box, Card, Flex, Link, Text } from "@radix-ui/themes";
+import { Flex, Text, Box } from "@radix-ui/themes";
 import { Link2Icon } from "@radix-ui/react-icons";
 
 import React from "react";
-import { getJson } from "../api";
+import { getReq } from "../api";
 
 type CollectionItem = {
   url: string;
@@ -14,13 +14,10 @@ export function CollectionView({ alias }: { alias: string }) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
 
-  const hash = window.location.hash;
-  const highlighted = hash ? Number(hash.slice(1)) : null;
-
   React.useEffect(() => {
     (async () => {
       try {
-        const data = await getJson<CollectionItem[]>(
+        const data = await getReq<CollectionItem[]>(
           `/api/collection/${encodeURIComponent(alias)}`
         );
         setItems(data);
@@ -34,40 +31,26 @@ export function CollectionView({ alias }: { alias: string }) {
   }, [alias]);
 
   if (loading) {
-    return <Text size="4">Loading...</Text>;
+    return <Text size="3">Loading…</Text>;
   }
 
   if (error) {
-    return <Text size="4" color="red">{error}</Text>;
+    return <Text size="3" color="red">{error}</Text>;
   }
 
   return (
-    <Flex direction="column" gap="4" align="center">
-      <Text size="3" weight="bold">{alias}</Text>
-
-      <Flex direction="column" gap="2" style={{ width: "40rem", maxWidth: "90vw" }}>
-        {items.map((item) => {
-          const isHighlighted = highlighted === item.position;
-          return (
-            <Card
-              key={item.position}
-              style={{
-                outline: isHighlighted ? "2px solid var(--accent-9)" : undefined,
-              }}
-            >
-              <Flex align="center" gap="3">
-                <Box>
-                  <Text size="1" color="gray">#{item.position}</Text>
-                </Box>
-                <Link2Icon />
-                <Link href={item.url} target="_blank" rel="noopener noreferrer" size="2">
-                  {item.url}
-                </Link>
-              </Flex>
-            </Card>
-          );
-        })}
-      </Flex>
+    <Flex direction="column" gap="3" style={{ maxWidth: "40rem", width: "100%" }}>
+      <Text size="4" weight="bold">{alias}</Text>
+      {items.map((item) => (
+        <Box key={item.position}>
+          <Flex gap="2" align="center">
+            <Link2Icon />
+            <a href={item.url} target="_blank" rel="noopener noreferrer">
+              <Text size="2">{item.url}</Text>
+            </a>
+          </Flex>
+        </Box>
+      ))}
     </Flex>
   );
 }
