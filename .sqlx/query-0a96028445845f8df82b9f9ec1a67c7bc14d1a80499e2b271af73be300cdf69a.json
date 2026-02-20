@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH ids AS (\n          SELECT collection_id\n          FROM UNNEST($1::bigint[]) AS t(collection_id)\n        )\n        UPDATE collections\n        SET last_seen = CURRENT_DATE\n        FROM ids\n        WHERE collections.id = ids.collection_id\n          AND collections.last_seen < CURRENT_DATE\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a96028445845f8df82b9f9ec1a67c7bc14d1a80499e2b271af73be300cdf69a"
+}

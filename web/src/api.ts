@@ -89,6 +89,35 @@ export async function getReq<ResponseType>(
   return (await res.json()) as ResponseType;
 }
 
+export async function postNoContent<RequestType>(
+  path: string,
+  body: RequestType,
+  signal?: AbortSignal
+): Promise<void> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+    body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
+  });
+
+  if (!res.ok) {
+    let reason = `Request error (${res.status})`;
+
+    try {
+      const err = (await res.json()) as ApiErrorBody;
+      if (err?.reason) reason = err.reason;
+    } catch {
+      // ignore
+    }
+
+    throw new Error(reason);
+  }
+}
+
 export async function deleteReq(path: string, signal?: AbortSignal): Promise<void> {
   const res = await fetch(path, {
     method: "DELETE",

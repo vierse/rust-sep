@@ -1,9 +1,10 @@
-import { TextField, Box, IconButton, Button } from "@radix-ui/themes";
+import { TextField, Box, IconButton, Button, Flex, SegmentedControl } from "@radix-ui/themes";
 import { Link2Icon, DotsHorizontalIcon, ClipboardIcon, EraserIcon, PaperPlaneIcon, ReloadIcon } from "@radix-ui/react-icons"
 
 import React from "react";
 import { postReq } from "../api";
 import { clipboardCopy } from "../util";
+import { CollectionCreator } from "./CollectionCreator";
 
 import { useNotify } from "./NotifyProvider";
 
@@ -19,8 +20,24 @@ type ShortenResponse = {
 
 type State = "idle" | "ok" | "err";
 
-export function MainView() {
+type Mode = "single" | "collection";
 
+export function MainView() {
+  const [mode, setMode] = React.useState<Mode>("single");
+
+  return (
+    <Flex direction="column" gap="4" align="center">
+      <SegmentedControl.Root value={mode} onValueChange={(v) => setMode(v as Mode)}>
+        <SegmentedControl.Item value="single">Single Link</SegmentedControl.Item>
+        <SegmentedControl.Item value="collection">Collection</SegmentedControl.Item>
+      </SegmentedControl.Root>
+
+      {mode === "single" ? <SingleLinkView /> : <CollectionCreator />}
+    </Flex>
+  );
+}
+
+function SingleLinkView() {
   const { notifyOk, notifyErr, notifyShort, dismiss } = useNotify();
 
   const [userUrl, setUserUrl] = React.useState("");

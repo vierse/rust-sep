@@ -1,4 +1,4 @@
-import { Button, Dialog, Flex, IconButton, Inset, Table, Text, TextField } from "@radix-ui/themes";
+import { Button, Dialog, Flex, IconButton, Inset, Separator, Table, Text, TextField } from "@radix-ui/themes";
 import { ClipboardIcon, Cross1Icon, PersonIcon } from "@radix-ui/react-icons";
 
 import React from "react";
@@ -141,12 +141,100 @@ export function UserView() {
                 <Dialog.Title>{user}</Dialog.Title>
                 <Button loading={waiting} color="red" onClick={onLogout}>Logout</Button>
               </Flex>
+              <Text size="2" weight="bold" as="div" mb="1">Links</Text>
               {open && <LinksTable />}
+              <Separator size="4" my="4" />
+              <Text size="2" weight="bold" as="div" mb="1">Collections</Text>
+              {open && <CollectionsTable />}
             </>
           )}
         </Dialog.Content>
       </Dialog.Root >
     </>
+  );
+}
+
+type CollectionListItem = { alias: string; item_count: number };
+
+function CollectionsTable() {
+  const [collections, setCollections] = React.useState<CollectionListItem[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [removing, setRemoving] = React.useState(false);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const data = await getReq<CollectionListItem[]>("/api/user/collections");
+        setCollections(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const copyCollection = async (c: CollectionListItem) => {
+    const url = `${window.location.origin}/collection/${encodeURIComponent(c.alias)}`;
+    clipboardCopy(url);
+  };
+
+  const removeCollection = async (c: CollectionListItem) => {
+    setRemoving(true);
+    try {
+      await deleteReq(`/api/user/collection/${encodeURIComponent(c.alias)}`);
+      setCollections((xs) => xs.filter((x) => x.alias !== c.alias));
+    } catch (err) {
+      console.log(err);
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  return (
+    <Inset side="x">
+      <Table.Root size="1">
+        <Table.Header>
+          <Table.Row>
+            <Table.ColumnHeaderCell>Alias</Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell>Items</Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell>Action</Table.ColumnHeaderCell>
+          </Table.Row>
+        </Table.Header>
+
+        <Table.Body>
+          {loading ? (
+            <Table.Row>
+              <Table.Cell>Loading…</Table.Cell>
+            </Table.Row>
+          ) : collections.length === 0 ? (
+            <Table.Row>
+            </Table.Row>
+          ) : (
+            collections.map((c) => (
+              <Table.Row key={c.alias}>
+                <Table.RowHeaderCell>{c.alias}</Table.RowHeaderCell>
+                <Table.Cell>{c.item_count}</Table.Cell>
+                <Table.Cell>
+                  <Flex gap="2" align="center">
+                    <IconButton
+                      variant="ghost"
+                      onClick={() => copyCollection(c)}
+                    >
+                      <ClipboardIcon />
+                    </IconButton>
+
+                    <IconButton disabled={removing} variant="ghost" onClick={() => removeCollection(c)}>
+                      <Cross1Icon />
+                    </IconButton>
+                  </Flex>
+                </Table.Cell>
+              </Table.Row>
+            ))
+          )}
+        </Table.Body>
+      </Table.Root>
+    </Inset>
   );
 }
 
@@ -197,8 +285,8 @@ function LinksTable() {
   };
 
   return (
-    <Inset side="x" my="5">
-      <Table.Root>
+    <Inset side="x">
+      <Table.Root size="1">
         <Table.Header>
           <Table.Row>
             <Table.ColumnHeaderCell>Link</Table.ColumnHeaderCell>

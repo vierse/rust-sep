@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.alias, COUNT(ci.id) as \"item_count!\"\n        FROM collections c\n        JOIN collection_items ci ON ci.collection_id = c.id\n        WHERE c.user_id = $1\n        GROUP BY c.id, c.alias\n        ORDER BY c.id DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "alias",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "70ba7d2c8c5b93db27f8f2fd7bf54b9b9301679b6474a0dd3576fa78c4dbad22"
+}

@@ -13,6 +13,7 @@ use crate::{
     app::{AppState, CachedLink, usage_metrics::Category},
     domain::{Alias, Url},
     services,
+    tasks::link_metrics::EntityKey,
 };
 
 // TODO: settings
@@ -78,7 +79,7 @@ pub async fn redirect(
     }
 
     // Update metrics
-    app.metrics.record_hit(link.id);
+    app.metrics.record_hit(EntityKey::Link(link.id));
 
     Ok(Redirect::temporary(&link.url))
 }
@@ -125,7 +126,7 @@ pub async fn redirect_unlock(
     }
 
     // Update metrics
-    app.metrics.record_hit(link.id);
+    app.metrics.record_hit(EntityKey::Link(link.id));
 
     Ok(UnlockResponse { url: link.url })
 }

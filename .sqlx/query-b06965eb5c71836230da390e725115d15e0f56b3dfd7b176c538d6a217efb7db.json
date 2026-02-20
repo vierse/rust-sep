@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.id as \"collection_id!: i64\", url\n        FROM collection_items ci\n        JOIN collections c ON c.id = ci.collection_id\n        WHERE c.alias = $1 AND position = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "collection_id!: i64",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "url",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "b06965eb5c71836230da390e725115d15e0f56b3dfd7b176c538d6a217efb7db"
+}

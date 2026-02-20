@@ -37,10 +37,16 @@ impl LinkMetricsData {
     }
 }
 
-pub type LinkMetricsMap = DashMap<i64, LinkMetricsData>;
+#[derive(Clone, Copy, Hash, Eq, PartialEq)]
+pub enum EntityKey {
+    Link(i64),
+    Collection(i64),
+}
+
+pub type CollectionMetricsMap = DashMap<EntityKey, LinkMetricsData>;
 
 pub struct LinkMetrics {
-    current: ArcSwap<LinkMetricsMap>,
+    current: ArcSwap<CollectionMetricsMap>,
 }
 
 impl LinkMetrics {
@@ -48,16 +54,14 @@ impl LinkMetrics {
         Self::default()
     }
 
-    pub fn record_hit(&self, link_id: i64) {
+    pub fn record_hit(&self, key: EntityKey) {
         let now_s = OffsetDateTime::now_utc().unix_timestamp();
 
         let map = self.current.load();
-        let val = map.entry(link_id).or_insert(LinkMetricsData::new(now_s));
+        let val = map.entry(key).or_insert(LinkMetricsData::new(now_s));
 
-        // increment hitcount
         val.hits.fetch_add(1, Ordering::Relaxed);
 
-        // update last access timestamp
         let mut last_access_s = val.last_access_s.load(Ordering::Relaxed);
         while now_s > last_access_s {
             match val.last_access_s.compare_exchange_weak(
@@ -72,7 +76,7 @@ impl LinkMetrics {
         }
     }
 
-    pub fn swap_map(&self) -> Arc<LinkMetricsMap> {
+    pub fn swap_map(&self) -> Arc<CollectionMetricsMap> {
         self.current.swap(Arc::new(DashMap::new()))
     }
 }
@@ -88,7 +92,7 @@ impl Default for LinkMetrics {
 pub async fn process_batch_task(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<()> {
     const CHUNK_SIZE: usize = 500;
 
-    let map: Arc<LinkMetricsMap> = metrics.swap_map();
+    let map = metrics.swap_map();
 
     if map.is_empty() {
         return Ok(());
@@ -96,16 +100,18 @@ pub async fn process_batch_task(pool: PgPool, metrics: Arc<LinkMetrics>) -> Resu
 
     let start = Instant::now();
 
-    // (link_id, hits, last_access) columns
     let mut link_id_col: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
-    let mut hits_col: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
-    let mut last_access_col: Vec<OffsetDateTime> = Vec::with_capacity(CHUNK_SIZE);
+    let mut link_hits_col: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
+    let mut link_last_access_col: Vec<OffsetDateTime> = Vec::with_capacity(CHUNK_SIZE);
+
+    let mut col_id_col: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
+    let mut col_hits_col: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
+    let mut col_last_access_col: Vec<OffsetDateTime> = Vec::with_capacity(CHUNK_SIZE);
 
     let mut entries_updated = 0usize;
-    for entry in map.iter() {
-        let link_id = *entry.key();
-        let val = entry.value();
 
+    for entry in map.iter() {
+        let val = entry.value();
         let hits = val.hits();
         if hits == 0 {
             continue;
@@ -114,23 +120,40 @@ pub async fn process_batch_task(pool: PgPool, metrics: Arc<LinkMetrics>) -> Resu
         let last_access = OffsetDateTime::from_unix_timestamp(val.last_access_s())
             .context("Failed to convert last access seconds (i64) back into unix timestamp")?;
 
-        link_id_col.push(link_id);
-        hits_col.push(hits);
-        last_access_col.push(last_access);
-        entries_updated += 1;
+        match *entry.key() {
+            EntityKey::Link(id) => {
+                link_id_col.push(id);
+                link_hits_col.push(hits);
+                link_last_access_col.push(last_access);
 
-        // Flush once a chunk is full
-        if link_id_col.len() == CHUNK_SIZE {
-            flush_to_db(&pool, &link_id_col, &hits_col, &last_access_col).await?;
-            // Clear columns
-            link_id_col.clear();
-            hits_col.clear();
-            last_access_col.clear();
+                if link_id_col.len() == CHUNK_SIZE {
+                    flush_to_db(&pool, &link_id_col, &link_hits_col, &link_last_access_col).await?;
+                    link_id_col.clear();
+                    link_hits_col.clear();
+                    link_last_access_col.clear();
+                }
+            }
+            EntityKey::Collection(id) => {
+                col_id_col.push(id);
+                col_hits_col.push(hits);
+                col_last_access_col.push(last_access);
+
+                if col_id_col.len() == CHUNK_SIZE {
+                    flush_collection_to_db(&pool, &col_id_col, &col_hits_col, &col_last_access_col)
+                        .await?;
+                    col_id_col.clear();
+                    col_hits_col.clear();
+                    col_last_access_col.clear();
+                }
+            }
         }
+
+        entries_updated += 1;
     }
 
-    // Flush the rest
-    flush_to_db(&pool, &link_id_col, &hits_col, &last_access_col).await?;
+    // Flush remaining
+    flush_to_db(&pool, &link_id_col, &link_hits_col, &link_last_access_col).await?;
+    flush_collection_to_db(&pool, &col_id_col, &col_hits_col, &col_last_access_col).await?;
 
     let elapsed_ms = start.elapsed().as_millis();
     tracing::info!("Updated {} entries in {} ms", entries_updated, elapsed_ms);
@@ -192,6 +215,60 @@ async fn flush_to_db(
     Ok(())
 }
 
+async fn flush_collection_to_db(
+    pool: &PgPool,
+    collection_id_col: &[i64],
+    hits_col: &[i64],
+    last_access_col: &[OffsetDateTime],
+) -> Result<()> {
+    if collection_id_col.is_empty() {
+        return Ok(());
+    }
+
+    let mut tx = pool.begin().await?;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO collection_metrics (day, collection_id, hits, last_access)
+        SELECT
+            CURRENT_DATE,
+            t.collection_id,
+            t.hits,
+            t.last_access
+        FROM UNNEST($1::bigint[], $2::bigint[], $3::timestamptz[])
+            AS t(collection_id, hits, last_access)
+        ON CONFLICT (day, collection_id) DO UPDATE
+          SET hits = collection_metrics.hits + EXCLUDED.hits,
+              last_access = GREATEST(collection_metrics.last_access, EXCLUDED.last_access)
+        "#,
+        collection_id_col,
+        hits_col,
+        last_access_col,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query!(
+        r#"
+        WITH ids AS (
+          SELECT collection_id
+          FROM UNNEST($1::bigint[]) AS t(collection_id)
+        )
+        UPDATE collections
+        SET last_seen = CURRENT_DATE
+        FROM ids
+        WHERE collections.id = ids.collection_id
+          AND collections.last_seen < CURRENT_DATE
+        "#,
+        collection_id_col,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
 static PART_NAME_DATE_FD: StaticFormatDescription = format_description!("[year][month][day]");
 static ISO_DATE_FD: StaticFormatDescription = format_description!("[year]-[month]-[day]");
 
@@ -210,19 +287,32 @@ pub async fn create_partitions_task(pool: PgPool) -> Result<()> {
         let iso_start = start.format(&ISO_DATE_FD)?;
         let iso_end = end.format(&ISO_DATE_FD)?;
 
+        let date_suffix = start.format(&PART_NAME_DATE_FD)?;
+
         // daily_metrics_YYYYMMDD
-        let part_name = format!("daily_metrics_{}", start.format(&PART_NAME_DATE_FD)?);
         let sql = format!(
             r#"
-            CREATE TABLE IF NOT EXISTS {part}
+            CREATE TABLE IF NOT EXISTS daily_metrics_{suffix}
             PARTITION OF daily_metrics
             FOR VALUES FROM ('{from}') TO ('{to}');
             "#,
-            part = part_name,
+            suffix = date_suffix,
             from = iso_start,
             to = iso_end,
         );
+        sqlx::query(&sql).execute(&pool).await?;
 
+        // collection_metrics_YYYYMMDD
+        let sql = format!(
+            r#"
+            CREATE TABLE IF NOT EXISTS collection_metrics_{suffix}
+            PARTITION OF collection_metrics
+            FOR VALUES FROM ('{from}') TO ('{to}');
+            "#,
+            suffix = date_suffix,
+            from = iso_start,
+            to = iso_end,
+        );
         sqlx::query(&sql).execute(&pool).await?;
     }
 

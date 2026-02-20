@@ -2,6 +2,7 @@ import { Flex } from "@radix-ui/themes";
 
 import { Route, Switch } from "wouter";
 
+import { CollectionView } from "./components/CollectionView";
 import { MainView } from "./components/MainView";
 import { UserView } from "./components/UserView";
 import { NotifyProvider } from "./components/NotifyProvider";
@@ -13,6 +14,7 @@ export default function App() {
       <Flex align="center" justify="center" height="90vh" direction="column" gap="4">
         <Switch>
           <Route path="/unlock/:alias">{(params) => <UnlockView alias={params.alias} />}</Route>
+          <Route path="/collection/:alias">{(params) => <CollectionView alias={params.alias} />}</Route>
           <Route>
             <div style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }}>
               <UserView />
