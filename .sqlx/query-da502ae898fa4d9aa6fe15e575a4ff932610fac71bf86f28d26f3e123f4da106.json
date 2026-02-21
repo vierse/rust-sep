@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM collections\n        WHERE user_id = $1\n          AND alias = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "da502ae898fa4d9aa6fe15e575a4ff932610fac71bf86f28d26f3e123f4da106"
+}

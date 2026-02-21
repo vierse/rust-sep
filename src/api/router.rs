@@ -17,6 +17,11 @@ pub fn build_router(state: AppState) -> Router {
     let user_api = Router::new()
         .route("/list", get(handlers::list_user_links))
         .route("/link/{alias}", delete(handlers::remove_user_link))
+        .route("/collections", get(handlers::list_user_collections))
+        .route(
+            "/collection/{alias}",
+            delete(handlers::remove_user_collection),
+        )
         .route("/logout", post(handlers::logout));
 
     // auth management API
@@ -25,10 +30,16 @@ pub fn build_router(state: AppState) -> Router {
         .route("/login", post(handlers::authenticate_user))
         .route("/register", post(handlers::create_user));
 
+    let collection_api = Router::new()
+        .route("/", post(handlers::create_collection))
+        .route("/{alias}", get(handlers::get_collection))
+        .route("/{alias}/item", get(handlers::get_collection_item));
+
     // core API functions
     let core_api = Router::new()
         .nest("/auth", auth_api)
         .nest("/user", user_api)
+        .nest("/collection", collection_api)
         .route("/shorten", post(handlers::shorten))
         .route("/recent", get(handlers::recently_added_links))
         .route("/unlock/{alias}", post(handlers::redirect_unlock));
