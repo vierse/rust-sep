@@ -22,6 +22,13 @@ pub async fn create_collection(
     State(app): State<AppState>,
     Json(req): Json<CreateCollectionRequest>,
 ) -> Result<Response, ApiError> {
+    if req.urls.is_empty() {
+        return Err(ApiError::public(
+            StatusCode::BAD_REQUEST,
+            "Collection must include at least one URL",
+        ));
+    }
+
     let user_id = session_id_opt
         .map(|sid| app.sessions.get_session_data(&sid).map(|s| s.user_id))
         .transpose()?;
