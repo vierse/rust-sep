@@ -32,7 +32,7 @@ impl Metrics {
         let date_time = OffsetDateTime::now_utc();
         let date = date_time.date();
         let time = date_time.time();
-        let week_day = date.weekday().number_from_monday() as usize;
+        let week_day = date.weekday().number_days_from_monday() as usize;
         let hour = time.hour() as usize;
 
         self.week_days[week_day].hours[hour].categories[cat as usize]

@@ -7,7 +7,13 @@ const TTI_DAYS: i32 = 30;
 const BATCH_SIZE: i64 = 5_000;
 
 pub async fn link_cleanup_task(pool: PgPool) -> Result<()> {
-    tracing::info!("Running link cleanup task...");
+    cleanup_expired_links(&pool).await?;
+    cleanup_expired_collections(&pool).await?;
+    Ok(())
+}
+
+async fn cleanup_expired_links(pool: &PgPool) -> Result<()> {
+    tracing::info!("Running link cleanup...");
 
     let mut entries_deleted = 0i64;
     let start = Instant::now();
@@ -33,7 +39,7 @@ pub async fn link_cleanup_task(pool: PgPool) -> Result<()> {
             TTI_DAYS,
             BATCH_SIZE,
         )
-        .fetch_one(&pool)
+        .fetch_one(pool)
         .await?;
 
         entries_deleted += row.deleted_count;
@@ -45,12 +51,62 @@ pub async fn link_cleanup_task(pool: PgPool) -> Result<()> {
 
     if entries_deleted > 0 {
         tracing::info!(
-            "Deleted {} entries in {} ms",
+            "Deleted {} expired links in {} ms",
             entries_deleted,
             start.elapsed().as_millis()
         );
     } else {
-        tracing::info!("Nothing to delete");
+        tracing::info!("No expired links to delete");
+    }
+
+    Ok(())
+}
+
+async fn cleanup_expired_collections(pool: &PgPool) -> Result<()> {
+    tracing::info!("Running collection cleanup...");
+
+    let mut entries_deleted = 0i64;
+    let start = Instant::now();
+    loop {
+        let row = sqlx::query!(
+            r#"
+            WITH expired AS (
+                SELECT id
+                FROM collections
+                WHERE last_seen < (CURRENT_DATE - $1::int)
+                ORDER BY id
+                LIMIT $2
+            ),
+            deleted AS (
+                DELETE FROM collections
+                USING expired
+                WHERE collections.id = expired.id
+                RETURNING 1
+            )
+            SELECT COUNT(*)::bigint AS "deleted_count!: i64"
+            FROM deleted;
+            "#,
+            TTI_DAYS,
+            BATCH_SIZE,
+        )
+        .fetch_one(pool)
+        .await?;
+
+        entries_deleted += row.deleted_count;
+
+        if row.deleted_count < BATCH_SIZE {
+            break;
+        }
+    }
+
+    if entries_deleted > 0 {
+        tracing::info!(
+            "Deleted {} expired collections in {} ms",
+            entries_deleted,
+            start.elapsed().as_millis()
+        );
+    } else {
+        tracing::info!("No expired collections to delete");
     }
 
     Ok(())
