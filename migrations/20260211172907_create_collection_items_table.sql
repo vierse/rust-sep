@@ -1,7 +1,8 @@
 CREATE TABLE collections (
     id SERIAL PRIMARY KEY,
-    alias TEXT UNIQUE NOT NULL,
-    last_seen DATE NOT NULL DEFAULT CURRENT_DATE
+    alias TEXT UNIQUE,
+    last_seen DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE collection_items (

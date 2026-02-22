@@ -2,13 +2,17 @@ import { TextField, Button, Flex, Box, IconButton } from "@radix-ui/themes";
 import { Link2Icon, PaperPlaneIcon, EraserIcon, PlusIcon, Cross1Icon, ClipboardIcon } from "@radix-ui/react-icons";
 
 import React from "react";
-import { postNoContent } from "../api";
+import { postReq } from "../api";
 import { clipboardCopy } from "../util";
 import { useNotify } from "./NotifyProvider";
 
 type CreateCollectionRequest = {
-  alias: string;
+  alias?: string;
   urls: string[];
+};
+
+type CreateCollectionResponse = {
+  alias: string;
 };
 
 export function CollectionCreator() {
@@ -42,10 +46,6 @@ export function CollectionCreator() {
     const trimmedAlias = alias.trim();
     const trimmedUrls = urls.map((u) => u.trim()).filter((u) => u.length > 0);
 
-    if (!trimmedAlias) {
-      notifyErr("Missing alias", "Enter an alias for your collection");
-      return;
-    }
     if (trimmedUrls.length === 0) {
       notifyErr("No URLs", "Add at least one URL to your collection");
       return;
@@ -57,10 +57,14 @@ export function CollectionCreator() {
       dismiss();
       setWaiting(true);
 
-      const body: CreateCollectionRequest = { alias: trimmedAlias, urls: trimmedUrls };
-      await postNoContent("/api/collection", body, ac.signal);
+      const body: CreateCollectionRequest = { urls: trimmedUrls };
+      if (trimmedAlias) body.alias = trimmedAlias;
 
-      const collectionUrl = `${window.location.origin}/collection/${encodeURIComponent(trimmedAlias)}`;
+      const res = await postReq<CreateCollectionRequest, CreateCollectionResponse>(
+        "/api/collection", body, ac.signal
+      );
+
+      const collectionUrl = `${window.location.origin}/collection/${encodeURIComponent(res.alias)}`;
       await clipboardCopy(collectionUrl);
       setResult(collectionUrl);
       notifyOk("Collection created — link copied!");
@@ -77,7 +81,7 @@ export function CollectionCreator() {
     }
   };
 
-  const canSubmit = alias.trim().length > 0 && urls.some((u) => u.trim().length > 0);
+  const canSubmit = urls.some((u) => u.trim().length > 0);
 
   if (result) {
     return (
@@ -105,7 +109,7 @@ export function CollectionCreator() {
   return (
     <Flex direction="column" gap="3" style={{ width: "40rem" }}>
       <TextField.Root
-        placeholder="Collection alias"
+        placeholder="Collection alias (optional)"
         value={alias}
         onChange={(e) => setAlias(e.target.value)}
       />

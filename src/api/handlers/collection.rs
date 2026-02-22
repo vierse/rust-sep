@@ -12,8 +12,13 @@ use crate::tasks::link_metrics::EntityKey;
 
 #[derive(Deserialize)]
 pub struct CreateCollectionRequest {
-    pub alias: String,
+    pub alias: Option<String>,
     pub urls: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct CreateCollectionResponse {
+    pub alias: String,
 }
 
 /// POST /api/collection — create a collection (multiple URLs under one alias)
@@ -33,21 +38,28 @@ pub async fn create_collection(
         .map(|sid| app.sessions.get_session_data(&sid).map(|s| s.user_id))
         .transpose()?;
 
-    let created = services::create_collection(&req.alias, &req.urls, &app.pool, user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "failed to create collection");
-            ApiError::internal()
-        })?;
-
-    if !created {
-        return Err(ApiError::public(
-            StatusCode::CONFLICT,
-            "This alias is already taken",
-        ));
+    if let Some(ref alias) = req.alias {
+        let _: crate::domain::Alias = alias.clone().try_into().map_err(ApiError::from)?;
     }
 
-    Ok(StatusCode::CREATED.into_response())
+    let alias = services::create_collection(
+        req.alias.as_deref(),
+        &req.urls,
+        &app.sqids,
+        &app.pool,
+        user_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "failed to create collection");
+        ApiError::from(e)
+    })?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateCollectionResponse { alias }),
+    )
+        .into_response())
 }
 
 /// GET /api/collection/:alias — list all links in a collection

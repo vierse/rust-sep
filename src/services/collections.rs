@@ -1,29 +1,28 @@
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use serde::Serialize;
+use sqids::Sqids;
 use sqlx::PgPool;
 
 use crate::{
     domain::{Alias, Url, UserId},
-    services::ServiceError,
+    services::{LinkServiceError, ServiceError},
 };
 
-/// Create a collection: insert multiple URLs under one alias
+/// Create a collection: insert multiple URLs under one alias.
+/// If `alias` is `Some`, uses user-chosen alias with conflict detection.
+/// If `alias` is `None`, auto-generates an alias via Sqids two-step insert.
 pub async fn create_collection(
-    alias: &str,
+    alias: Option<&str>,
     urls: &[String],
+    generator: &Sqids,
     pool: &PgPool,
     user_id: Option<UserId>,
-) -> Result<bool, ServiceError> {
+) -> Result<String, ServiceError> {
     if urls.is_empty() {
         return Err(ServiceError::Other(anyhow!(
             "collection must include at least one URL"
         )));
     }
-
-    let alias: Alias = alias
-        .to_string()
-        .try_into()
-        .map_err(|e: crate::domain::AliasParseError| ServiceError::Other(e.into()))?;
 
     for url in urls {
         let _: Url = url
@@ -34,25 +33,68 @@ pub async fn create_collection(
 
     let mut tx = pool.begin().await.map_err(ServiceError::DatabaseError)?;
 
-    let rec = sqlx::query!(
-        r#"
-        INSERT INTO collections(alias, user_id)
-        VALUES ($1, $2)
-        ON CONFLICT (alias) DO NOTHING
-        RETURNING id
-        "#,
-        alias.as_str(),
-        user_id,
-    )
-    .fetch_optional(&mut *tx)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
+    let (collection_id, alias) = match alias {
+        Some(alias_str) => {
+            let alias: Alias = alias_str
+                .to_string()
+                .try_into()
+                .map_err(|e: crate::domain::AliasParseError| ServiceError::Other(e.into()))?;
 
-    let Some(rec) = rec else {
-        return Ok(false);
+            let rec = sqlx::query!(
+                r#"
+                INSERT INTO collections(alias, user_id)
+                VALUES ($1, $2)
+                ON CONFLICT (alias) DO NOTHING
+                RETURNING id
+                "#,
+                alias.as_str(),
+                user_id,
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(ServiceError::DatabaseError)?;
+
+            let Some(rec) = rec else {
+                return Err(LinkServiceError::AlreadyExists.into());
+            };
+
+            (rec.id, alias_str.to_string())
+        }
+        None => {
+            let rec = sqlx::query!(
+                r#"
+                INSERT INTO collections(user_id)
+                VALUES ($1)
+                RETURNING id
+                "#,
+                user_id,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(ServiceError::DatabaseError)?;
+
+            let id = rec.id as u64;
+            let alias = generator
+                .encode(&[id])
+                .context("Sqids alphabet was exhausted")
+                .map_err(ServiceError::Other)?;
+
+            sqlx::query!(
+                r#"
+                UPDATE collections
+                SET alias = $1
+                WHERE id = $2
+                "#,
+                alias,
+                rec.id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(ServiceError::DatabaseError)?;
+
+            (rec.id, alias)
+        }
     };
-
-    let collection_id = rec.id;
 
     for (i, url) in urls.iter().enumerate() {
         let position = i32::try_from(i)
@@ -62,7 +104,7 @@ pub async fn create_collection(
             r#"
             INSERT INTO collection_items (collection_id, url, position)
             VALUES ($1, $2, $3)
-        "#,
+            "#,
             collection_id,
             url,
             position,
@@ -74,7 +116,7 @@ pub async fn create_collection(
 
     tx.commit().await.map_err(ServiceError::DatabaseError)?;
 
-    Ok(true)
+    Ok(alias)
 }
 
 /// Get all items in a collection by alias, ordered by position.
@@ -149,7 +191,7 @@ pub async fn query_collections_by_user_id(
         JOIN collection_items ci ON ci.collection_id = c.id
         WHERE c.user_id = $1
         GROUP BY c.id, c.alias
-        ORDER BY c.id DESC
+        ORDER BY c.created_at DESC
         "#,
         user_id
     )
@@ -160,7 +202,7 @@ pub async fn query_collections_by_user_id(
     let collections = rec_vec
         .into_iter()
         .map(|rec| CollectionListItem {
-            alias: rec.alias,
+            alias: rec.alias.unwrap_or_default(),
             item_count: rec.item_count,
         })
         .collect();
