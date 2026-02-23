@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 pub mod usage_metrics;
 
 use crate::{
-    api::{self, Sessions},
+    api::{self, Sessions, token::TokenSigner},
     config::Settings,
     domain::Alias,
     scheduler::Scheduler,
@@ -45,6 +45,7 @@ pub struct AppState {
     pub sessions: Sessions,
     pub hasher: Arc<Argon2<'static>>,
     pub diag: Arc<Diag>,
+    pub signer: Arc<TokenSigner>,
 }
 
 #[derive(Default)]
@@ -122,6 +123,12 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
         hasher: Arc::new(Argon2::default()),
         usage_metrics: Default::default(),
         diag: Arc::new(Diag::default()),
+        // TODO: move key into env?
+        signer: Arc::new(TokenSigner::new(
+            "YWhlcm9pc2p1c3RhbWFud2hva25vd3NoZWlzZnJlZS4="
+                .as_bytes()
+                .to_vec(),
+        )),
     })
 }
 
