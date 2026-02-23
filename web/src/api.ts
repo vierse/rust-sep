@@ -63,9 +63,10 @@ export async function postReq<RequestType, ResponseType = void>(
 
 export async function getReq<ResponseType>(
   path: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  params?: URLSearchParams,
 ): Promise<ResponseType> {
-  const res = await fetch(path, {
+  const res = await fetch(params ? `${path}?${params}` : path, {
     method: "GET",
     headers: {
       "Accept": "application/json"

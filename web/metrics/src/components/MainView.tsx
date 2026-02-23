@@ -9,9 +9,10 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { TextField, Box, IconButton, Button } from "@radix-ui/themes";
-
-
 import React from "react";
+
+import { getReq } from "/src/api";
+import { CategorySelecter, allOptions } from "./CategorySelecter";
 
 ChartJS.register(
   CategoryScale,
@@ -22,30 +23,67 @@ ChartJS.register(
   Legend
 );
 
-const labels = ["Monday", "Tuesday", "Wendsday", "Thursday", "Friday", "Saturday", "Sunday"];
-
-export const data = {
-  labels,
-  datasets: [
-    {
-      label: 'Dataset 1',
-      data: [0, 1, 2, 3, 4, 5, 6],
-      backgroundColor: "red",
-    },
-    {
-      label: 'Dataset 2',
-      data: [6, 5, 4, 3, 2, 1, 0],
-      backgroundColor: "green", 
-    },
-  ],
-};
 
 export function MainView() {
+
+  const [useData, setData] = React.useState(Array(7).fill(0));
+  const [catState, setCatState] = React.useState([null]);
+
+  const get_data = async (cats) => {
+    console.debug("cats=" + cats);
+    const res = await getReq("/metrics/data",
+                          null,
+                          new URLSearchParams({weekdays: cats.join(',')}));
+    setData(res);
+  };
+
+  const onSelectValues = (value, index) => {
+    const clonedCatState = structuredClone(catState);
+
+    clonedCatState[index] = value;
+    setCatState(clonedCatState);
+    get_data(clonedCatState[0].map((opt) => opt.value));
+  };
+
+ 
+  const weekdays = ["Monday", "Tuesday", "Wendsday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const data = {
+    labels: weekdays,
+    datasets: [
+      {
+        label: 'totals',
+        data: useData,
+        backgroundColor: "red",
+      },
+    ],
+  };
+
   return (
     <>
-      <Bar
-        data={data}
-      />
+      {catState.map((selectCount, index) => {
+        const options = getOptionsToRender(catState, allOptions);
+        return (
+            <CategorySelecter
+              value={catState[index]}
+              options={options}
+              onSelect={(value) => onSelectValues(value, index)}
+              key={index}
+            />
+        );
+      })}
+      <Bar data={data} />
     </>
   )
+}
+
+const getOptionsToRender = (allSelectedOptions, allOptions) => {
+  const filteredOptions = allSelectedOptions.flatMap((options) => options);
+
+  const optionsToRender =
+      filteredOptions.length > 0 ? allOptions.filter(
+            (option) => !filteredOptions.some((selectOption) =>
+                option && selectOption && option.value == selectOption.value
+              )
+            ): allOptions;
+  return optionsToRender;
 }

@@ -17,6 +17,10 @@ export default defineConfig({
         target: "http://localhost:3000",
         changeOrigin: true,
       },
+      "/metrics": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+      },
       "/r": {
         target: "http://localhost:3000",
         changeOrigin: true,
@@ -26,6 +30,8 @@ export default defineConfig({
   plugins: [react()],
  
   build: {
+    // sourcemap: true,
+    minify: false,
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),

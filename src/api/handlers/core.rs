@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
+use tracing::Instrument;
 
 use crate::{
     api::{error::ApiError, extract::MaybeUser},
@@ -66,6 +67,7 @@ pub async fn redirect(
     State(app): State<AppState>,
     Path(alias): Path<String>,
 ) -> Result<Redirect, ApiError> {
+    app.usage_metrics.log(Category::Redirect);
     let alias: Alias = alias.try_into()?;
     let link = fetch_link(&alias, &app).await?;
 
@@ -193,4 +195,12 @@ pub async fn recently_added_links(State(app): State<AppState>) -> Result<Respons
     let links = services::recently_added_links(10, &app.pool).await?;
 
     Ok((StatusCode::OK, Json(links)).into_response())
+}
+
+pub async fn metrics(State(app): State<AppState>) -> Result<Response, ApiError> {
+    let usage = &*app.usage_metrics;
+
+    let day_totals: Vec<_> = usage.week_days.iter().map(|d| d.total_usage()).collect();
+
+    Ok((StatusCode::OK, Json(&day_totals)).into_response())
 }

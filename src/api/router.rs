@@ -25,6 +25,9 @@ pub fn build_router(state: AppState) -> Router {
         .route("/login", post(handlers::authenticate_user))
         .route("/register", post(handlers::create_user));
 
+    // metrics API
+    let metrics_api = Router::new().route("/data", get(handlers::metrics));
+
     // core API functions
     let core_api = Router::new()
         .nest("/auth", auth_api)
@@ -36,6 +39,7 @@ pub fn build_router(state: AppState) -> Router {
     // assemble everything
     let api = Router::new()
         .nest("/api", core_api)
+        .nest("/metrics", metrics_api)
         .route("/r/{alias}", get(handlers::redirect))
         .with_state(state.clone())
         .layer(from_fn_with_state(state, session::session_manager_mw)); // must be last

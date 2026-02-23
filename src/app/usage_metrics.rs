@@ -13,14 +13,13 @@ pub struct Metrics {
 
 #[derive(Default)]
 pub struct Hour {
-    pub categories: [AtomicUsize; 6],
+    pub categories: [AtomicUsize; Category::AuthenticateUser as usize + 1],
 }
 
 #[derive(Clone, Copy)]
-#[repr(u8)]
+#[repr(u32)]
 pub enum Category {
     Redirect,
-    Recent,
     Shorten,
     RecentlyAdded,
     AuthenticateSession,
@@ -50,6 +49,7 @@ impl Metrics {
             .unwrap();
         idx
     }
+
     pub fn total_usage_in(&self, cat: Category) -> usize {
         self.week_days
             .iter()
