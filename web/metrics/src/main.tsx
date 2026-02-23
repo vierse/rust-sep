@@ -1,0 +1,17 @@
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { Theme } from "@radix-ui/themes"
+
+import "@radix-ui/themes/styles.css";
+import "/src/styles.css"
+
+import App from "./App";
+
+// <Bar  />
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <Theme appearance="dark">
+      <App />
+    </Theme>
+  </React.StrictMode>
+);
