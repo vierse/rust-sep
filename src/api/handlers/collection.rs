@@ -3,12 +3,16 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
+use time::{Duration, OffsetDateTime};
 
 use crate::api::error::ApiError;
 use crate::api::extract::MaybeUser;
-use crate::app::AppState;
+use crate::app::{AppState, CachedCollection};
+use crate::domain::Alias;
 use crate::services;
 use crate::tasks::link_metrics::EntityKey;
+
+const EXPIRY_DAYS: i64 = 30;
 
 #[derive(Deserialize)]
 pub struct CreateCollectionRequest {
@@ -62,25 +66,54 @@ pub async fn create_collection(
         .into_response())
 }
 
+async fn fetch_collection(alias: &Alias, app: &AppState) -> Result<CachedCollection, ApiError> {
+    let coll_opt = if let Some(cached) = app.collection_cache.get(alias).await {
+        app.diag.cache_hit();
+        cached
+    } else {
+        app.diag.cache_miss();
+        app.collection_cache
+            .try_get_with_by_ref(alias, services::query_collection_by_alias(alias, &app.pool))
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "failed to query collection");
+                ApiError::internal()
+            })?
+    };
+
+    let collection = coll_opt.ok_or_else(ApiError::not_found)?;
+
+    let today = OffsetDateTime::now_utc().date();
+    if collection.last_seen < today.saturating_sub(Duration::days(EXPIRY_DAYS)) {
+        return Err(ApiError::public(
+            StatusCode::GONE,
+            "The collection has expired",
+        ));
+    }
+
+    Ok(collection)
+}
+
 /// GET /api/collection/:alias — list all links in a collection
 pub async fn get_collection(
     State(app): State<AppState>,
     Path(alias): Path<String>,
 ) -> Result<Response, ApiError> {
-    let result = services::get_collection(&alias, &app.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "failed to get collection");
-            ApiError::internal()
-        })?;
+    let alias: Alias = alias.try_into()?;
+    let collection = fetch_collection(&alias, &app).await?;
 
-    match result {
-        Some((collection_id, items)) => {
-            app.metrics.record_hit(EntityKey::Collection(collection_id));
-            Ok(Json(items).into_response())
-        }
-        None => Err(ApiError::not_found()),
-    }
+    app.metrics.record_hit(EntityKey::Collection(collection.id));
+
+    let items: Vec<_> = collection
+        .items
+        .into_iter()
+        .map(|item| services::CollectionItem {
+            url: item.url,
+            position: item.position,
+        })
+        .collect();
+
+    Ok(Json(items).into_response())
 }
 
 #[derive(Deserialize)]
@@ -94,20 +127,19 @@ pub async fn get_collection_item(
     Path(alias): Path<String>,
     Query(query): Query<CollectionItemQuery>,
 ) -> Result<Response, ApiError> {
-    let result = services::get_collection_item(&alias, query.i, &app.pool)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "failed to get collection item");
-            ApiError::internal()
-        })?;
+    let alias: Alias = alias.try_into()?;
+    let collection = fetch_collection(&alias, &app).await?;
 
-    match result {
-        Some((collection_id, url)) => {
-            app.metrics.record_hit(EntityKey::Collection(collection_id));
-            Ok(Json(CollectionItemResponse { url }).into_response())
-        }
-        None => Err(ApiError::not_found()),
-    }
+    let url = collection
+        .items
+        .iter()
+        .find(|item| item.position == query.i)
+        .map(|item| item.url.clone())
+        .ok_or_else(ApiError::not_found)?;
+
+    app.metrics.record_hit(EntityKey::Collection(collection.id));
+
+    Ok(Json(CollectionItemResponse { url }).into_response())
 }
 
 #[derive(Serialize)]

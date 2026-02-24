@@ -4,6 +4,7 @@ use sqids::Sqids;
 use sqlx::PgPool;
 
 use crate::{
+    app::{CachedCollection, CachedCollectionItem},
     domain::{Alias, Url, UserId},
     services::{LinkServiceError, ServiceError},
 };
@@ -11,6 +12,7 @@ use crate::{
 /// Create a collection: insert multiple URLs under one alias.
 /// If `alias` is `Some`, uses user-chosen alias with conflict detection.
 /// If `alias` is `None`, auto-generates an alias via Sqids two-step insert.
+#[tracing::instrument(name = "services::create_collection", skip(generator, pool))]
 pub async fn create_collection(
     alias: Option<&str>,
     urls: &[String],
@@ -119,21 +121,20 @@ pub async fn create_collection(
     Ok(alias)
 }
 
-/// Get all items in a collection by alias, ordered by position.
-/// Returns the collection id alongside the items for metrics tracking.
-pub async fn get_collection(
-    alias: &str,
+#[tracing::instrument(name = "services::query_collection_by_alias", skip(pool))]
+pub async fn query_collection_by_alias(
+    alias: &Alias,
     pool: &PgPool,
-) -> Result<Option<(i64, Vec<CollectionItem>)>, ServiceError> {
+) -> Result<Option<CachedCollection>, ServiceError> {
     let rows = sqlx::query!(
         r#"
-        SELECT c.id as "collection_id!: i64", url, position
+        SELECT c.id as "collection_id!: i64", c.last_seen, url, position
         FROM collection_items ci
         JOIN collections c ON c.id = ci.collection_id
         WHERE c.alias = $1
         ORDER BY position
         "#,
-        alias,
+        alias.as_str(),
     )
     .fetch_all(pool)
     .await
@@ -142,40 +143,21 @@ pub async fn get_collection(
     if rows.is_empty() {
         Ok(None)
     } else {
-        let collection_id = rows[0].collection_id;
+        let id = rows[0].collection_id;
+        let last_seen = rows[0].last_seen;
         let items = rows
             .into_iter()
-            .map(|r| CollectionItem {
+            .map(|r| CachedCollectionItem {
                 url: r.url,
                 position: r.position,
             })
             .collect();
-        Ok(Some((collection_id, items)))
+        Ok(Some(CachedCollection {
+            id,
+            last_seen,
+            items,
+        }))
     }
-}
-
-/// Get a single item from a collection by alias and index (position).
-/// Returns the collection id alongside the url for metrics tracking.
-pub async fn get_collection_item(
-    alias: &str,
-    index: i32,
-    pool: &PgPool,
-) -> Result<Option<(i64, String)>, ServiceError> {
-    let rec = sqlx::query!(
-        r#"
-        SELECT c.id as "collection_id!: i64", url
-        FROM collection_items ci
-        JOIN collections c ON c.id = ci.collection_id
-        WHERE c.alias = $1 AND position = $2
-        "#,
-        alias,
-        index,
-    )
-    .fetch_optional(pool)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
-
-    Ok(rec.map(|r| (r.collection_id, r.url)))
 }
 
 /// List user's collections

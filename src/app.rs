@@ -35,6 +35,19 @@ pub struct CachedLink {
     pub password_hash: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct CachedCollection {
+    pub id: i64,
+    pub last_seen: Date,
+    pub items: Vec<CachedCollectionItem>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CachedCollectionItem {
+    pub url: String,
+    pub position: i32,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
@@ -42,6 +55,7 @@ pub struct AppState {
     pub usage_metrics: Arc<usage_metrics::Metrics>,
     pub metrics: Arc<LinkMetrics>,
     pub cache: Cache<Alias, Option<CachedLink>>,
+    pub collection_cache: Cache<Alias, Option<CachedCollection>>,
     pub sessions: Sessions,
     pub hasher: Arc<Argon2<'static>>,
     pub diag: Arc<Diag>,
@@ -113,11 +127,17 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
         .max_capacity(3_000)
         .build();
 
+    let collection_cache: Cache<Alias, Option<CachedCollection>> = Cache::builder()
+        .time_to_idle(Duration::from_secs(60 * 60 * 24))
+        .max_capacity(3_000)
+        .build();
+
     Ok(AppState {
         pool,
         sqids,
         metrics,
         cache,
+        collection_cache,
         sessions: Sessions::default(),
         hasher: Arc::new(Argon2::default()),
         usage_metrics: Default::default(),
