@@ -19,7 +19,7 @@ pub async fn create_user(
 
     let rec_opt = sqlx::query!(
         r#"
-        INSERT INTO users_main (username, password_hash)
+        INSERT INTO users (username, password_hash)
         VALUES ($1, $2)
         ON CONFLICT (username) DO NOTHING
         RETURNING id
@@ -28,8 +28,7 @@ pub async fn create_user(
         hash
     )
     .fetch_optional(pool)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
+    .await?;
 
     Ok(rec_opt.map(|rec| User::new(rec.id, username)))
 }
@@ -44,22 +43,20 @@ pub async fn authenticate_user(
     let rec = sqlx::query!(
         r#"
         SELECT id, password_hash
-        FROM users_main
+        FROM users
         WHERE username = $1
         "#,
         username.as_str()
     )
     .fetch_optional(pool)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
+    .await?;
 
     let Some(rec) = rec else {
         return Err(ServiceError::AuthError);
     };
 
     let hash = PasswordHash::new(&rec.password_hash)
-        .map_err(|e| anyhow::anyhow!("invalid password hash: {e}"))
-        .map_err(ServiceError::Other)?;
+        .map_err(|e| anyhow::anyhow!("invalid password hash: {e}"))?;
 
     let password_str = password.as_str();
     if hasher

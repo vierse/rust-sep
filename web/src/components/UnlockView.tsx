@@ -11,10 +11,6 @@ type UnlockRequest = {
   password: string;
 };
 
-type UnlockResponse = {
-  url: string;
-};
-
 export function UnlockView({ alias }: { alias: string }) {
 
   const [waiting, setWaiting] = React.useState(false);
@@ -36,9 +32,11 @@ export function UnlockView({ alias }: { alias: string }) {
     const body = { password } as UnlockRequest;
     const path = `/api/unlock/${encodeURIComponent(alias)}`;
 
+    console.log(alias);
+
     try {
-      const res = await postReq<UnlockRequest, UnlockResponse>(path, body);
-      window.location.assign(res.url);
+      await postReq<UnlockRequest>(path, body);
+      window.location.assign(`/r/${encodeURIComponent(alias)}`);
     } catch (err) {
       setState("err");
       const errMsg = err instanceof Error ? err.message : "Internal error";

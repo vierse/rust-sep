@@ -1,3 +1,13 @@
+export class LockedError extends Error {
+  unlockUrl: string;
+
+  constructor(unlockUrl: string) {
+    super("Resource is locked");
+    this.name = "LockedError";
+    this.unlockUrl = unlockUrl;
+  }
+}
+
 function containsJson(res: Response) {
   const ct = res.headers.get("content-type") ?? "";
   return ct.includes("application/json");
@@ -73,6 +83,11 @@ export async function getReq<ResponseType>(
     },
     ...(signal ? { signal } : {}),
   });
+
+  if (res.status === 423) {
+    const body = await res.json();
+    throw new LockedError(body.unlock);
+  }
 
   if (!res.ok) {
     let reason = `Request error (${res.status})`;

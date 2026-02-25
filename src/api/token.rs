@@ -26,7 +26,10 @@ pub trait Token: Serialize + DeserializeOwned {
     const TYPE: &'static str;
 
     fn exp(&self) -> i64;
-    fn typ(&self) -> &str;
+
+    fn typ(&self) -> &str {
+        Self::TYPE
+    }
 
     fn validate(&self, now_ts: i64) -> Result<(), TokenError> {
         if self.typ() != Self::TYPE {

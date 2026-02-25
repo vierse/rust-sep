@@ -7,6 +7,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0"
 axum = { version = "0.8.7", features = ["macros"] }
+axum-extra = { version = "0.12.5", features = ["cookie"] }
 base64 = "0.22"
 config = "0.15"
 const_format = "0.2.35"

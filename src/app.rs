@@ -27,9 +27,16 @@ use crate::{
     },
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CachedLinkType {
+    Redirect,
+    Collection,
+}
+
 #[derive(Debug, Clone)]
 pub struct CachedLink {
     pub id: i64,
+    pub kind: CachedLinkType,
     pub url: String,
     pub last_seen: Date,
     pub password_hash: Option<String>,
