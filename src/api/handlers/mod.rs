@@ -8,5 +8,4 @@ pub(crate) use core::*;
 pub(crate) use metrics::*;
 pub(crate) use user::*;
 
-pub use core::ShortenResponse;
-pub use core::{EXPIRY_DAYS, UNLOCK_PATH};
+pub use core::EXPIRY_DAYS;
