@@ -8,7 +8,7 @@ use axum::{
 use crate::{
     api::{error::ApiError, extract::RequireUser, session::ClearSid},
     app::AppState,
-    domain::Alias,
+    domain::LinkAlias,
     services::{self, query_links_by_user_id},
 };
 
@@ -27,7 +27,7 @@ pub async fn remove_user_link(
     State(app): State<AppState>,
     Path(alias): Path<String>,
 ) -> Result<Response, ApiError> {
-    let alias: Alias = alias.try_into()?;
+    let alias: LinkAlias = alias.try_into()?;
 
     let session = app.sessions.get_session_data(&session_id)?;
     services::delete_link_for_user(&session.user_id, &alias, &app.pool).await?;

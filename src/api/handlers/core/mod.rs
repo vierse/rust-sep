@@ -10,7 +10,7 @@ pub(crate) use unlock::*;
 use crate::{
     api::error::ApiError,
     app::{AppState, CachedLink},
-    domain::Alias,
+    domain::LinkAlias,
     services,
 };
 use axum::http::StatusCode;
@@ -18,7 +18,7 @@ use time::{Duration, OffsetDateTime};
 
 pub const EXPIRY_DAYS: i64 = 30;
 
-async fn fetch_link(alias: &Alias, app: &AppState) -> Result<CachedLink, ApiError> {
+async fn fetch_link(alias: &LinkAlias, app: &AppState) -> Result<CachedLink, ApiError> {
     let link_opt = if let Some(link) = app.cache.get(alias).await {
         app.diag.cache_hit();
         link

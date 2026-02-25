@@ -20,13 +20,10 @@ impl User {
     }
 }
 
-pub enum CredentialsError {
-    UsernameInvalidChars,
-    UsernameTooShort,
-    UsernameTooLong,
-    PasswordInvalidChars,
-    PasswordTooShort,
-    PasswordTooLong,
+pub enum UsernameError {
+    TooShort,
+    TooLong,
+    InvalidChars,
 }
 
 #[derive(Debug, Clone)]
@@ -42,27 +39,33 @@ impl UserName {
 }
 
 impl TryFrom<String> for UserName {
-    type Error = CredentialsError;
+    type Error = UsernameError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let len = value.chars().count();
 
         if len < Self::MIN_USERNAME_LENGTH {
-            return Err(CredentialsError::UsernameTooShort);
+            return Err(UsernameError::TooShort);
         }
 
         if len > Self::MAX_USERNAME_LENGTH {
-            return Err(CredentialsError::UsernameTooLong);
+            return Err(UsernameError::TooLong);
         }
 
         let valid = value.chars().all(|c| c.is_ascii_alphanumeric());
 
         if !valid {
-            return Err(CredentialsError::UsernameInvalidChars);
+            return Err(UsernameError::InvalidChars);
         }
 
         Ok(UserName(value))
     }
+}
+
+pub enum UserPasswordError {
+    TooShort,
+    TooLong,
+    InvalidChars,
 }
 
 #[derive(Debug, Clone)]
@@ -78,20 +81,20 @@ impl UserPassword {
 }
 
 impl TryFrom<String> for UserPassword {
-    type Error = CredentialsError;
+    type Error = UserPasswordError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let len = value.chars().count();
 
         if len < Self::MIN_PASSWORD_LENGTH {
-            return Err(CredentialsError::PasswordTooShort);
+            return Err(UserPasswordError::TooShort);
         }
         if len > Self::MAX_PASSWORD_LENGTH {
-            return Err(CredentialsError::PasswordTooLong);
+            return Err(UserPasswordError::TooLong);
         }
 
         if value.chars().any(|c| c.is_control()) {
-            return Err(CredentialsError::PasswordInvalidChars);
+            return Err(UserPasswordError::InvalidChars);
         }
 
         Ok(UserPassword(value))

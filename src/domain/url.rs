@@ -1,11 +1,10 @@
 use thiserror::Error;
-
 use url::Url as UrlParser;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Url(String);
 
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum UrlParseError {
     #[error("contains userinfo")]
     ContainsUserinfo,
@@ -16,7 +15,7 @@ pub enum UrlParseError {
     #[error("URL does not contain a host")]
     EmptyHost,
     #[error("could not parse the URL")]
-    Invalid(url::ParseError),
+    Invalid(#[from] url::ParseError),
 }
 
 impl Url {
@@ -27,38 +26,56 @@ impl Url {
     pub fn into_string(self) -> String {
         self.0
     }
-}
 
-impl TryFrom<String> for Url {
-    type Error = UrlParseError;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let url = UrlParser::parse(&value).map_err(UrlParseError::Invalid)?;
+    fn validate(input: &str) -> Result<(), UrlParseError> {
+        let url = UrlParser::parse(input)?;
 
         let scheme = url.scheme();
         if scheme != "http" && scheme != "https" {
-            return Err(UrlParseError::WrongScheme(scheme.to_string()));
+            return Err(UrlParseError::WrongScheme(scheme.to_owned()));
         }
 
         if !url.username().is_empty() || url.password().is_some() {
             return Err(UrlParseError::ContainsUserinfo);
         }
 
-        let url_domain = url.domain().unwrap_or("");
-        if url_domain.is_empty() {
+        let host = url
+            .host_str()
+            .ok_or(UrlParseError::EmptyHost)?
+            .trim_end_matches('.')
+            .to_ascii_lowercase();
+
+        if host.is_empty() {
             return Err(UrlParseError::EmptyHost);
         }
-        if url_domain
-            .trim_end_matches(".")
-            .to_ascii_lowercase()
-            .eq_ignore_ascii_case("localhost")
-            || url_domain.ends_with(".local")
-            || !url_domain.contains('.')
-        {
-            return Err(UrlParseError::BlockedHost(url_domain.to_string()));
+
+        if host == "localhost" || host.ends_with(".local") || !host.contains('.') {
+            return Err(UrlParseError::BlockedHost(host.to_owned()));
         }
 
-        Ok(Url(value))
+        if host == "127.0.0.1" {
+            return Err(UrlParseError::BlockedHost(host.to_owned()));
+        }
+
+        Ok(())
+    }
+}
+
+impl TryFrom<String> for Url {
+    type Error = UrlParseError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::validate(&value)?;
+        Ok(Self(value))
+    }
+}
+
+impl TryFrom<&str> for Url {
+    type Error = UrlParseError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::validate(value)?;
+        Ok(Self(value.to_owned()))
     }
 }
 
@@ -76,13 +93,8 @@ mod test {
         ];
 
         for url in urls {
-            let result: Result<Url, _> = url.to_string().try_into();
-            assert!(
-                result.is_ok(),
-                "{} should be allowed, instead: {:?}",
-                url,
-                result
-            );
+            let result = Url::try_from(url);
+            assert!(result.is_ok(), "{url} should be allowed, got: {result:?}");
         }
     }
 
@@ -111,12 +123,10 @@ mod test {
         ];
 
         for url in urls {
-            let result: Result<Url, _> = url.to_string().try_into();
+            let result = Url::try_from(url);
             assert!(
                 result.is_err(),
-                "{} should not be allowed, instead: {:?}",
-                url,
-                result
+                "{url} should not be allowed, got: {result:?}"
             );
         }
     }
@@ -124,10 +134,7 @@ mod test {
     #[test]
     fn saved_url_format() {
         let test_url = "https://example.com";
-        let url: Url = test_url
-            .to_string()
-            .try_into()
-            .expect("Could not parse the URL");
+        let url = Url::try_from(test_url).expect("Could not parse the URL");
         assert_eq!(test_url, url.as_str(), "Saved URL does not match the input");
     }
 }

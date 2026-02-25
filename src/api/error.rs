@@ -8,7 +8,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     api::{session::SessionError, token::TokenError},
-    domain::{Alias, AliasParseError, CredentialsError, UrlParseError, UserName, UserPassword},
+    domain::{
+        LinkAlias, LinkAliasError, UrlParseError, UserName, UserPassword, UserPasswordError,
+        UsernameError,
+    },
     services::{LinkError, ServiceError},
 };
 
@@ -124,24 +127,24 @@ impl From<UrlParseError> for ApiError {
     }
 }
 
-impl From<AliasParseError> for ApiError {
-    fn from(error: AliasParseError) -> Self {
+impl From<LinkAliasError> for ApiError {
+    fn from(error: LinkAliasError) -> Self {
         match error {
-            AliasParseError::TooShort => Self::public(
+            LinkAliasError::TooShort => Self::public(
                 StatusCode::BAD_REQUEST,
                 formatcp!(
                     "Chosen link must be at least {} characters",
-                    Alias::MIN_ALIAS_LENGTH
+                    LinkAlias::MIN_ALIAS_LENGTH
                 ),
             ),
-            AliasParseError::TooLong => Self::public(
+            LinkAliasError::TooLong => Self::public(
                 StatusCode::BAD_REQUEST,
                 formatcp!(
                     "Chosen link cannot contain more than {} characters",
-                    Alias::MAX_ALIAS_LENGTH
+                    LinkAlias::MAX_ALIAS_LENGTH
                 ),
             ),
-            AliasParseError::InvalidCharacters => Self::public(
+            LinkAliasError::InvalidChars => Self::public(
                 StatusCode::BAD_REQUEST,
                 "Chosen link contains invalid characters",
             ),
@@ -149,39 +152,46 @@ impl From<AliasParseError> for ApiError {
     }
 }
 
-impl From<CredentialsError> for ApiError {
-    fn from(error: CredentialsError) -> Self {
+impl From<UsernameError> for ApiError {
+    fn from(error: UsernameError) -> Self {
         match error {
-            CredentialsError::UsernameInvalidChars => ApiError::public(
+            UsernameError::InvalidChars => ApiError::public(
                 StatusCode::BAD_REQUEST,
                 "Username contains invalid characters",
             ),
-            CredentialsError::UsernameTooShort => ApiError::public(
+            UsernameError::TooShort => ApiError::public(
                 StatusCode::BAD_REQUEST,
                 formatcp!(
                     "Username must be at least {} characters",
                     UserName::MIN_USERNAME_LENGTH
                 ),
             ),
-            CredentialsError::UsernameTooLong => ApiError::public(
+            UsernameError::TooLong => ApiError::public(
                 StatusCode::BAD_REQUEST,
                 formatcp!(
                     "Username cannot be longer than {} characters",
                     UserName::MAX_USERNAME_LENGTH
                 ),
             ),
-            CredentialsError::PasswordInvalidChars => ApiError::public(
+        }
+    }
+}
+
+impl From<UserPasswordError> for ApiError {
+    fn from(error: UserPasswordError) -> Self {
+        match error {
+            UserPasswordError::InvalidChars => ApiError::public(
                 StatusCode::BAD_REQUEST,
                 "Password contains invalid characters",
             ),
-            CredentialsError::PasswordTooShort => ApiError::public(
+            UserPasswordError::TooShort => ApiError::public(
                 StatusCode::BAD_REQUEST,
                 formatcp!(
                     "Password must contain at least {} characters",
                     UserPassword::MIN_PASSWORD_LENGTH
                 ),
             ),
-            CredentialsError::PasswordTooLong => ApiError::public(
+            UserPasswordError::TooLong => ApiError::public(
                 StatusCode::BAD_REQUEST,
                 formatcp!(
                     "Password cannot be longer than {} characters",

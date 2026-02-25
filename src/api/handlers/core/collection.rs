@@ -13,7 +13,7 @@ use crate::{
         handlers::{OwnerToken, UnlockToken},
     },
     app::{AppState, CachedLinkType},
-    domain::{Alias, Url},
+    domain::{LinkAlias, Url},
     services::{self, CollectionItem},
 };
 
@@ -35,7 +35,7 @@ pub async fn collection_list(
     State(app): State<AppState>,
     Path(alias): Path<String>,
 ) -> Result<Response, ApiError> {
-    let alias: Alias = alias.try_into()?;
+    let alias: LinkAlias = alias.try_into()?;
 
     let link = super::fetch_link(&alias, &app).await?;
 
@@ -74,7 +74,7 @@ pub async fn collection_create(
         return Err(ApiError::unauthorized());
     };
 
-    let alias: Alias = alias.try_into()?;
+    let alias: LinkAlias = alias.try_into()?;
     let link = super::fetch_link(&alias, &app).await?;
 
     if link.id != token.link_id() {
@@ -111,7 +111,7 @@ pub async fn collection_add_url(
         return Err(ApiError::unauthorized());
     };
 
-    let alias: Alias = alias.try_into()?;
+    let alias: LinkAlias = alias.try_into()?;
 
     let link = super::fetch_link(&alias, &app).await?;
 

@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use thiserror::Error;
 
 use crate::{
-    domain::{Alias, Url},
+    domain::{LinkAlias, Url},
     services::ServiceError,
 };
 
@@ -26,7 +26,7 @@ pub struct CollectionItem {
     title: Option<String>,
 }
 
-pub async fn convert_to_collection(alias: &Alias, pool: &PgPool) -> Result<(), ServiceError> {
+pub async fn convert_to_collection(alias: &LinkAlias, pool: &PgPool) -> Result<(), ServiceError> {
     let mut tx = pool.begin().await?;
 
     let parent = sqlx::query!(
@@ -87,7 +87,7 @@ pub async fn convert_to_collection(alias: &Alias, pool: &PgPool) -> Result<(), S
 }
 
 pub async fn add_url_to_collection(
-    alias: &Alias,
+    alias: &LinkAlias,
     url: &Url,
     title: Option<&str>,
     pool: &PgPool,

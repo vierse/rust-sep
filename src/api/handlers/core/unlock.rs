@@ -13,7 +13,7 @@ use time::{Duration, OffsetDateTime};
 use crate::{
     api::{error::ApiError, extract::MaybeToken, token::Token},
     app::AppState,
-    domain::Alias,
+    domain::LinkAlias,
 };
 
 #[derive(Deserialize)]
@@ -57,7 +57,7 @@ pub async fn unlock(
     Path(alias): Path<String>,
     Json(UnlockRequest { password }): Json<UnlockRequest>,
 ) -> Result<(CookieJar, Response), ApiError> {
-    let alias: Alias = alias.try_into()?;
+    let alias: LinkAlias = alias.try_into()?;
 
     let link = super::fetch_link(&alias, &app).await?;
 

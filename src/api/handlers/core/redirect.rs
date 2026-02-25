@@ -6,7 +6,7 @@ use axum::{
 use crate::{
     api::{error::ApiError, extract::MaybeToken, handlers::UnlockToken},
     app::{AppState, CachedLinkType},
-    domain::Alias,
+    domain::LinkAlias,
     services,
 };
 
@@ -15,7 +15,7 @@ pub async fn redirect(
     State(app): State<AppState>,
     Path(alias): Path<String>,
 ) -> Result<Redirect, ApiError> {
-    let alias: Alias = alias.try_into()?;
+    let alias: LinkAlias = alias.try_into()?;
     redirect_impl(&app, alias, None, token).await
 }
 
@@ -24,13 +24,13 @@ pub async fn redirect_indexed(
     State(app): State<AppState>,
     Path((alias, idx)): Path<(String, usize)>,
 ) -> Result<Redirect, ApiError> {
-    let alias: Alias = alias.try_into()?;
+    let alias: LinkAlias = alias.try_into()?;
     redirect_impl(&app, alias, Some(idx), token).await
 }
 
 async fn redirect_impl(
     app: &AppState,
-    alias: Alias,
+    alias: LinkAlias,
     idx_opt: Option<usize>,
     token_opt: Option<UnlockToken>,
 ) -> Result<Redirect, ApiError> {

@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::{
     app::{CachedLink, CachedLinkType},
-    domain::{Alias, Url, UserId},
+    domain::{LinkAlias, Url, UserId},
     services::ServiceError,
 };
 
@@ -88,7 +88,7 @@ pub async fn create_link(
 )]
 pub async fn create_link_with_alias(
     url: &Url,
-    alias: &Alias,
+    alias: &LinkAlias,
     pool: &PgPool,
     user_id: Option<UserId>,
     password: Option<&str>,
@@ -125,7 +125,7 @@ pub async fn create_link_with_alias(
 /// Returns Ok(None) if the alias does not exist
 #[tracing::instrument(name = "services::query_url_by_alias", skip(pool))]
 pub async fn query_url_by_alias(
-    alias: &Alias,
+    alias: &LinkAlias,
     pool: &PgPool,
 ) -> Result<Option<CachedLink>, ServiceError> {
     let rec_opt = sqlx::query!(
@@ -190,7 +190,7 @@ pub async fn query_links_by_user_id(
 #[tracing::instrument(name = "services::remove_user_link", skip(pool))]
 pub async fn delete_link_for_user(
     user_id: &UserId,
-    alias: &Alias,
+    alias: &LinkAlias,
     pool: &PgPool,
 ) -> Result<(), ServiceError> {
     sqlx::query!(
