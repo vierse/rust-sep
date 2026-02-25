@@ -11,15 +11,6 @@ pub use collections::*;
 pub use links::*;
 pub use users::*;
 
-/// Hash a password with argon2, returning the hash string.
-pub fn hash_password(password: &str, hasher: &Argon2<'_>) -> Result<String, ServiceError> {
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = hasher
-        .hash_password(password.as_bytes(), &salt)
-        .map_err(|_| anyhow!("failed to hash password"))?;
-    Ok(hash.to_string())
-}
-
 #[derive(Debug, Error)]
 pub enum ServiceError {
     #[error("authentication failed")]
@@ -32,4 +23,13 @@ pub enum ServiceError {
     CollectionError(#[from] CollectionError),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+pub fn hash_password(password: &str, hasher: &Argon2<'_>) -> Result<String, ServiceError> {
+    let salt = SaltString::generate(&mut OsRng);
+
+    hasher
+        .hash_password(password.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .map_err(|e| anyhow!("failed to hash password: {e}").into())
 }

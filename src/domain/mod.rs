@@ -1,7 +1,7 @@
-mod alias;
+mod link;
 mod url;
 mod user;
 
-pub use alias::{Alias, AliasParseError};
-pub use url::{Url, UrlParseError};
-pub use user::{CredentialsError, User, UserId, UserName, UserPassword};
+pub use link::*;
+pub use url::*;
+pub use user::*;

@@ -11,7 +11,7 @@ use time::{Duration, OffsetDateTime};
 use crate::{
     api::{error::ApiError, extract::MaybeUser, token::Token},
     app::{AppState, usage_metrics::Category},
-    domain::{Alias, Url},
+    domain::{LinkAlias, Url},
     services,
 };
 
@@ -87,7 +87,7 @@ pub async fn shorten(
     let (link_id, alias) = match alias {
         // If request contains an alias, validate and save it
         Some(user_alias) => {
-            let alias: Alias = user_alias.try_into()?;
+            let alias: LinkAlias = user_alias.try_into()?;
 
             services::create_link_with_alias(
                 &url,
