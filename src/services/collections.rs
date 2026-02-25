@@ -201,5 +201,19 @@ pub async fn query_collection_url_by_pos(
     pos: i32,
     pool: &PgPool,
 ) -> Result<String, ServiceError> {
-    todo!()
+    let rec_opt = sqlx::query!(
+        r#"
+        SELECT target_url
+        FROM collection_items
+        WHERE link_id = $1
+          AND position = $2
+        "#,
+        link_id,
+        pos
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let rec = rec_opt.ok_or(CollectionError::LinkNotFound)?;
+    Ok(rec.target_url)
 }
