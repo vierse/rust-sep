@@ -35,18 +35,22 @@ impl IntoResponse for ShortenResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct OwnerToken {
-    pub alias: String,
+    link_id: i64,
     exp: i64,
 }
 
 impl OwnerToken {
     const TTL_SECS: i64 = 24 * 60 * 60; // 1 hour
 
-    fn new(alias: String, now_s: i64) -> Self {
+    fn new(link_id: i64, now_s: i64) -> Self {
         Self {
-            alias,
+            link_id,
             exp: now_s + Self::TTL_SECS,
         }
+    }
+
+    pub fn link_id(&self) -> i64 {
+        self.link_id
     }
 }
 
@@ -80,7 +84,7 @@ pub async fn shorten(
 
     let password_ref = password.as_deref();
 
-    let alias = match alias {
+    let (link_id, alias) = match alias {
         // If request contains an alias, validate and save it
         Some(user_alias) => {
             let alias: Alias = user_alias.try_into()?;
@@ -116,7 +120,7 @@ pub async fn shorten(
 
     let now = OffsetDateTime::now_utc();
     let now_s = now.unix_timestamp();
-    let token = OwnerToken::new(alias, now_s);
+    let token = OwnerToken::new(link_id, now_s);
     let signed_token = app.signer.sign_token(&token)?;
 
     let cookie = Cookie::build(("owner_token", signed_token))

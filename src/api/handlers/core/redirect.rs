@@ -37,9 +37,7 @@ async fn redirect_impl(
     let link = super::fetch_link(&alias, app).await?;
 
     // redirect if link is locked and user has no matching token
-    let unlocked = token_opt
-        .as_ref()
-        .is_some_and(|t| t.alias == alias.as_str());
+    let unlocked = token_opt.as_ref().is_some_and(|t| link.id == t.link_id());
     if link.password_hash.is_some() && !unlocked {
         return Ok(Redirect::temporary(&format!("/unlock/{}", alias.as_str())));
     }

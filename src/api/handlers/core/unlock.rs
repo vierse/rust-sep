@@ -23,18 +23,22 @@ pub struct UnlockRequest {
 
 #[derive(Serialize, Deserialize)]
 pub struct UnlockToken {
-    pub alias: String,
+    link_id: i64,
     exp: i64,
 }
 
 impl UnlockToken {
     const TTL_SECS: i64 = 30 * 60; // 30 minutes
 
-    fn new(alias: String, now_s: i64) -> Self {
+    fn new(link_id: i64, now_s: i64) -> Self {
         Self {
-            alias,
+            link_id,
             exp: now_s + Self::TTL_SECS,
         }
+    }
+
+    pub fn link_id(&self) -> i64 {
+        self.link_id
     }
 }
 
@@ -62,7 +66,7 @@ pub async fn unlock(
     };
 
     if let Some(token) = unlock_token {
-        if token.alias == alias.as_str() {
+        if link.id == token.link_id() {
             return Ok((jar, StatusCode::OK.into_response()));
         }
     }
@@ -83,7 +87,7 @@ pub async fn unlock(
     let now = OffsetDateTime::now_utc();
     let now_s = now.unix_timestamp();
 
-    let token = UnlockToken::new(alias.as_str().to_owned(), now_s);
+    let token = UnlockToken::new(link.id, now_s);
     let signed_token = app.signer.sign_token(&token)?;
 
     let cookie = Cookie::build(("unlock", signed_token))
