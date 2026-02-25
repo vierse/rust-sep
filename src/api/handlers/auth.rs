@@ -1,6 +1,5 @@
 use axum::{
     Json,
-    body::Body,
     extract::State,
     http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
@@ -45,7 +44,7 @@ fn build_cookie_header(sid: &str) -> HeaderValue {
 pub async fn authenticate_session(
     RequireUser(session_id): RequireUser,
     State(app): State<AppState>,
-) -> Result<Response<Body>, ApiError> {
+) -> Result<Response, ApiError> {
     app.usage_metrics.log(Category::AuthenticateSession);
     let session = app.sessions.get_session_data(&session_id)?;
 
@@ -58,7 +57,7 @@ pub async fn authenticate_session(
 pub async fn authenticate_user(
     State(app): State<AppState>,
     Json(AuthRequest { username, password }): Json<AuthRequest>,
-) -> Result<Response<Body>, ApiError> {
+) -> Result<Response, ApiError> {
     app.usage_metrics.log(Category::AuthenticateUser);
 
     let username: UserName = username.try_into()?;
@@ -82,7 +81,7 @@ pub async fn authenticate_user(
 pub async fn create_user(
     State(app): State<AppState>,
     Json(AuthRequest { username, password }): Json<AuthRequest>,
-) -> Result<Response<Body>, ApiError> {
+) -> Result<Response, ApiError> {
     let username: UserName = username.try_into()?;
     let password: UserPassword = password.try_into()?;
 

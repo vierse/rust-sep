@@ -6,7 +6,7 @@ use sqlx::PgPool;
 use thiserror::Error;
 
 use crate::{
-    app::CachedLink,
+    app::{CachedLink, CachedLinkType},
     domain::{Alias, Url, UserId},
     services::ServiceError,
 };
@@ -14,7 +14,7 @@ use crate::{
 use super::hash_password;
 
 #[derive(Debug, Error)]
-pub enum LinkServiceError {
+pub enum LinkError {
     #[error("alias already exists")]
     AlreadyExists,
     #[error("alias not found")]
@@ -40,11 +40,11 @@ pub async fn create_link(
         .transpose()?;
     let password_hash_ref = password_hash.as_deref();
 
-    let mut tx = pool.begin().await.map_err(ServiceError::DatabaseError)?;
+    let mut tx = pool.begin().await?;
     // Insert the url into database to get a unique id
     let rec = sqlx::query!(
         r#"
-        INSERT INTO links_main (url, user_id, password_hash)
+        INSERT INTO links (target_url, user_id, password_hash)
         VALUES ($1, $2, $3)
         RETURNING id
         "#,
@@ -53,20 +53,18 @@ pub async fn create_link(
         password_hash_ref,
     )
     .fetch_one(&mut *tx)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
+    .await?;
 
     let id = rec.id as u64;
 
     let alias = generator
         .encode(&[id])
-        .context("Sqids alphabet was exhausted")
-        .map_err(ServiceError::Other)?;
+        .context("Sqids alphabet was exhausted")?;
 
     // Update the record with generated alias
     let updated = sqlx::query!(
         r#"
-        UPDATE links_main
+        UPDATE links
         SET alias = $1
         WHERE id = $2
         RETURNING alias
@@ -75,15 +73,11 @@ pub async fn create_link(
         rec.id
     )
     .fetch_one(&mut *tx)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
+    .await?;
 
-    tx.commit().await.map_err(ServiceError::DatabaseError)?;
+    tx.commit().await?;
 
-    let alias = updated
-        .alias
-        .context("Updated record contained no alias")
-        .map_err(ServiceError::Other)?;
+    let alias = updated.alias.context("Updated record contained no alias")?;
 
     Ok(alias)
 }
@@ -111,7 +105,7 @@ pub async fn create_link_with_alias(
 
     let rec_opt = sqlx::query!(
         r#"
-        INSERT INTO links_main (alias, url, user_id, password_hash)
+        INSERT INTO links (alias, target_url, user_id, password_hash)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (alias) DO NOTHING
         RETURNING alias
@@ -122,12 +116,11 @@ pub async fn create_link_with_alias(
         password_hash_ref,
     )
     .fetch_optional(pool)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
+    .await?;
 
     match rec_opt {
         Some(rec) => Ok(rec.alias.unwrap()),
-        None => Err(LinkServiceError::AlreadyExists.into()),
+        None => Err(LinkError::AlreadyExists.into()),
     }
 }
 
@@ -140,23 +133,26 @@ pub async fn query_url_by_alias(
     pool: &PgPool,
 ) -> Result<Option<CachedLink>, ServiceError> {
     let rec_opt = sqlx::query!(
-        r#"SELECT id, url, last_seen, password_hash FROM links_main WHERE alias = $1"#,
+        r#"SELECT id, kind, target_url, last_seen, password_hash FROM links WHERE alias = $1"#,
         alias.as_str()
     )
     .fetch_optional(pool)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
+    .await?;
 
-    rec_opt
-        .map(|rec| {
-            Ok(CachedLink {
-                id: rec.id,
-                url: rec.url,
-                last_seen: rec.last_seen,
-                password_hash: rec.password_hash,
-            })
-        })
-        .transpose()
+    let rec = rec_opt.ok_or(LinkError::NotFound)?;
+    let kind = if rec.kind == "redirect" {
+        CachedLinkType::Redirect
+    } else {
+        CachedLinkType::Collection
+    };
+
+    Ok(Some(CachedLink {
+        id: rec.id,
+        kind,
+        url: rec.target_url.unwrap_or_default(),
+        last_seen: rec.last_seen,
+        password_hash: rec.password_hash,
+    }))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -173,22 +169,21 @@ pub async fn query_links_by_user_id(
 ) -> Result<Vec<LinkItem>, ServiceError> {
     let rec_vec = sqlx::query!(
         r#"
-        SELECT alias, url
-        FROM links_main
+        SELECT alias, target_url
+        FROM links
         WHERE user_id = $1
         ORDER BY created_at DESC
         "#,
         user_id
     )
     .fetch_all(pool)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
+    .await?;
 
     let links = rec_vec
         .into_iter()
         .map(|rec| LinkItem {
             alias: rec.alias.unwrap_or_default(),
-            url: rec.url,
+            url: rec.target_url.unwrap(),
         })
         .collect();
 
@@ -204,7 +199,7 @@ pub async fn remove_user_link(
 ) -> Result<(), ServiceError> {
     sqlx::query!(
         r#"
-        DELETE FROM links_main
+        DELETE FROM links
         WHERE user_id = $1
           AND alias = $2
         "#,
@@ -212,8 +207,7 @@ pub async fn remove_user_link(
         alias.as_str()
     )
     .execute(pool)
-    .await
-    .map_err(ServiceError::DatabaseError)?;
+    .await?;
 
     Ok(())
 }
@@ -222,8 +216,8 @@ pub async fn remove_user_link(
 pub async fn recently_added_links(limit: i64, pool: &PgPool) -> Result<Vec<String>, ServiceError> {
     let recs = sqlx::query!(
         r#"
-        SELECT url
-        FROM links_main
+        SELECT target_url
+        FROM links
         ORDER BY id DESC
         LIMIT $1
         "#,
@@ -233,5 +227,8 @@ pub async fn recently_added_links(limit: i64, pool: &PgPool) -> Result<Vec<Strin
     .await
     .context("DB select recent links query failed")?;
 
-    Ok(recs.into_iter().map(|rec| rec.url).collect())
+    Ok(recs
+        .into_iter()
+        .map(|rec| rec.target_url.unwrap())
+        .collect())
 }

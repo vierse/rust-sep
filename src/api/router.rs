@@ -28,19 +28,27 @@ pub fn build_router(state: AppState) -> Router {
     // metrics API
     let metrics_api = Router::new().route("/data", get(handlers::metrics));
 
+    // collection API
+    let collection_api = Router::new()
+        .route("/create/{alias}", post(handlers::collection_create))
+        .route("/{alias}/list", get(handlers::collection_list))
+        .route("/{alias}/add", post(handlers::collection_add_url));
+
     // core API functions
     let core_api = Router::new()
         .nest("/auth", auth_api)
         .nest("/user", user_api)
+        .nest("/collection", collection_api)
         .route("/shorten", post(handlers::shorten))
         .route("/recent", get(handlers::recently_added_links))
-        .route("/unlock/{alias}", post(handlers::redirect_unlock));
+        .route("/unlock/{alias}", post(handlers::unlock));
 
     // assemble everything
     let api = Router::new()
         .nest("/api", core_api)
         .nest("/metrics", metrics_api)
         .route("/r/{alias}", get(handlers::redirect))
+        .route("/r/{alias}/{idx}", get(handlers::redirect_indexed))
         .with_state(state.clone())
         .layer(from_fn_with_state(state, session::session_manager_mw)); // must be last
 

@@ -152,7 +152,7 @@ async fn flush_to_db(
 
     sqlx::query!(
         r#"
-        INSERT INTO daily_metrics (day, link_id, hits, last_access)
+        INSERT INTO link_metrics (day, link_id, hits, last_access)
         SELECT
             CURRENT_DATE,
             t.link_id,
@@ -161,8 +161,8 @@ async fn flush_to_db(
         FROM UNNEST($1::bigint[], $2::bigint[], $3::timestamptz[])
             AS t(link_id, hits, last_access)
         ON CONFLICT (day, link_id) DO UPDATE
-          SET hits = daily_metrics.hits + EXCLUDED.hits,
-              last_access = GREATEST(daily_metrics.last_access, EXCLUDED.last_access)
+          SET hits = link_metrics.hits + EXCLUDED.hits,
+              last_access = GREATEST(link_metrics.last_access, EXCLUDED.last_access)
         "#,
         link_id_col,
         hits_col,
@@ -177,11 +177,11 @@ async fn flush_to_db(
           SELECT link_id
           FROM UNNEST($1::bigint[]) AS t(link_id)
         )
-        UPDATE links_main
+        UPDATE links
         SET last_seen = CURRENT_DATE
         FROM ids
-        WHERE links_main.id = ids.link_id
-          AND links_main.last_seen < CURRENT_DATE
+        WHERE links.id = ids.link_id
+          AND links.last_seen < CURRENT_DATE
         "#,
         link_id_col,
     )
@@ -211,11 +211,11 @@ pub async fn create_partitions_task(pool: PgPool) -> Result<()> {
         let iso_end = end.format(&ISO_DATE_FD)?;
 
         // daily_metrics_YYYYMMDD
-        let part_name = format!("daily_metrics_{}", start.format(&PART_NAME_DATE_FD)?);
+        let part_name = format!("link_metrics_{}", start.format(&PART_NAME_DATE_FD)?);
         let sql = format!(
             r#"
             CREATE TABLE IF NOT EXISTS {part}
-            PARTITION OF daily_metrics
+            PARTITION OF link_metrics
             FOR VALUES FROM ('{from}') TO ('{to}');
             "#,
             part = part_name,

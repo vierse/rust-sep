@@ -3,11 +3,13 @@ use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use rand_core::OsRng;
 use thiserror::Error;
 
+mod collections;
 mod links;
 mod users;
 
+pub use collections::*;
 pub use links::*;
-pub use users::{authenticate_user, create_user};
+pub use users::*;
 
 /// Hash a password with argon2, returning the hash string.
 pub fn hash_password(password: &str, hasher: &Argon2<'_>) -> Result<String, ServiceError> {
@@ -25,7 +27,9 @@ pub enum ServiceError {
     #[error("database error {0}")]
     DatabaseError(#[from] sqlx::Error),
     #[error(transparent)]
-    LinkServiceError(#[from] LinkServiceError),
+    LinkError(#[from] LinkError),
+    #[error(transparent)]
+    CollectionError(#[from] CollectionError),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

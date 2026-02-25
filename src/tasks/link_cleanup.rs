@@ -16,15 +16,15 @@ pub async fn link_cleanup_task(pool: PgPool) -> Result<()> {
             r#"
             WITH expired AS (
                 SELECT id
-                FROM links_main
+                FROM links
                 WHERE last_seen < (CURRENT_DATE - $1::int)
                 ORDER BY id
                 LIMIT $2
             ),
             deleted AS (
-                DELETE FROM links_main
+                DELETE FROM links
                 USING expired
-                WHERE links_main.id = expired.id
+                WHERE links.id = expired.id
                 RETURNING 1
             )
             SELECT COUNT(*)::bigint AS "deleted_count!: i64"
@@ -87,7 +87,7 @@ mod test {
 
                 sqlx::query!(
                     r#"
-                    INSERT INTO links_main (alias, url, last_seen)
+                    INSERT INTO links (alias, target_url, last_seen)
                     SELECT a, u, $3
                     FROM UNNEST($1::text[], $2::text[]) AS t(a, u)
                     "#,
@@ -119,7 +119,7 @@ mod test {
             SELECT
             COUNT(*) FILTER (WHERE last_seen < $1)::bigint  AS "expired!: i64",
             COUNT(*) FILTER (WHERE last_seen >= $1)::bigint AS "good!: i64"
-            FROM links_main
+            FROM links
             "#,
             cutoff,
         )

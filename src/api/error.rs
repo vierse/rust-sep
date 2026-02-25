@@ -7,9 +7,9 @@ use const_format::formatcp;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api::session::SessionError,
+    api::{session::SessionError, token::TokenError},
     domain::{Alias, AliasParseError, CredentialsError, UrlParseError, UserName, UserPassword},
-    services::{LinkServiceError, ServiceError},
+    services::{LinkError, ServiceError},
 };
 
 #[derive(Debug)]
@@ -49,6 +49,13 @@ impl ApiError {
             reason: "Internal server error",
         }
     }
+
+    pub fn unauthorized() -> Self {
+        Self {
+            status_code: StatusCode::UNAUTHORIZED,
+            reason: "Unauthorized",
+        }
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -57,10 +64,16 @@ impl IntoResponse for ApiError {
     }
 }
 
+impl From<TokenError> for ApiError {
+    fn from(_error: TokenError) -> Self {
+        Self::internal()
+    }
+}
+
 impl From<ServiceError> for ApiError {
     fn from(error: ServiceError) -> Self {
         match error {
-            ServiceError::LinkServiceError(err) => err.into(),
+            ServiceError::LinkError(err) => err.into(),
             _ => {
                 // propagated internal errors will be logged here
                 tracing::error!(error = %error, "internal error: ");
@@ -70,13 +83,13 @@ impl From<ServiceError> for ApiError {
     }
 }
 
-impl From<LinkServiceError> for ApiError {
-    fn from(error: LinkServiceError) -> Self {
+impl From<LinkError> for ApiError {
+    fn from(error: LinkError) -> Self {
         match error {
-            LinkServiceError::AlreadyExists => {
+            LinkError::AlreadyExists => {
                 Self::public(StatusCode::CONFLICT, "This alias already exists")
             }
-            LinkServiceError::NotFound => Self::not_found(),
+            LinkError::NotFound => Self::not_found(),
         }
     }
 }

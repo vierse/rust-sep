@@ -219,7 +219,7 @@ async fn redirect_expired_link(pool: PgPool) {
 
     sqlx::query!(
         r#"
-        INSERT INTO links_main (alias, url, last_seen)
+        INSERT INTO links (alias, target_url, last_seen)
         VALUES ($1, $2, $3)
         "#,
         ALIAS,

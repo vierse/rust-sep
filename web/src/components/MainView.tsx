@@ -1,15 +1,14 @@
-import { TextField, Box, IconButton, Button } from "@radix-ui/themes";
-import { Link2Icon, DotsHorizontalIcon, ClipboardIcon, EraserIcon, PaperPlaneIcon, ReloadIcon } from "@radix-ui/react-icons"
+import { Box, Flex, Button, TextField, Card, IconButton, Tooltip } from "@radix-ui/themes";
+import { ClipboardIcon, DotsHorizontalIcon, Link2Icon, PaperPlaneIcon, PlusIcon, ReloadIcon, ResetIcon } from "@radix-ui/react-icons";
 
 import React from "react";
-import { postReq } from "../api";
-import { clipboardCopy } from "../util";
-
 import { useNotify } from "./NotifyProvider";
+import { postEmpty, postReq } from "../api";
+import { clipboardCopy, urlWithAlias } from "../util";
 
 type ShortenRequest = {
   url: string;
-  name?: string;
+  alias?: string;
   password?: string;
 };
 
@@ -20,40 +19,55 @@ type ShortenResponse = {
 type State = "idle" | "ok" | "err";
 
 export function MainView() {
-
+  // Notifications
   const { notifyOk, notifyErr, notifyShort, dismiss } = useNotify();
 
-  const [userUrl, setUserUrl] = React.useState("");
-  const [urlName, setUrlName] = React.useState<string | undefined>(undefined);
-  const [userPassword, setUserPassword] = React.useState<string | undefined>(undefined);
-  const [result, setResult] = React.useState("");
-  const [showOptions, setShowOptions] = React.useState(false);
+  // UI state
   const [state, setState] = React.useState<State>("idle");
-
+  const [showOptions, setShowOptions] = React.useState(false);
   const [waiting, setWaiting] = React.useState(false);
+  const [result, setResult] = React.useState("");
+  const [resultUrl, setResultUrl] = React.useState("");
+
+  // User state
+  const [userUrl, setUserUrl] = React.useState("");
+  const [linkAlias, setLinkAlias] = React.useState<string | undefined>(undefined);
+  const [linkPassword, setLinkPassword] = React.useState<string | undefined>(undefined);
+
+  const toggleOptions = () => {
+    setLinkAlias(undefined);
+    setLinkPassword(undefined);
+    setShowOptions(!showOptions);
+  }
 
   const clearState = () => {
-    setUserUrl("");
-    setUrlName(undefined);
-    setUserPassword(undefined);
-    setResult("");
-    setShowOptions(false);
-    setState("idle");
     dismiss();
+
+    setState("idle");
+    setShowOptions(false);
+    setWaiting(false);
+    setResult("");
+    setResultUrl("");
+
+    setUserUrl("");
+    setLinkAlias(undefined);
+    setLinkPassword(undefined);
   };
 
-  const submit = async () => {
+  const shortenUrl = async () => {
     const ac = new AbortController();
     const timeoutId = setTimeout(() => ac.abort(), 5_000);
     try {
       dismiss();
       setWaiting(true);
 
-      const body = { url: userUrl, name: urlName || undefined, password: userPassword || undefined } as ShortenRequest;
+      const body = { url: userUrl, alias: linkAlias || undefined, password: linkPassword || undefined } as ShortenRequest;
       const res = await postReq<ShortenRequest, ShortenResponse>("/api/shorten", body, ac.signal);
-      const shortUrl = `${window.location.origin}/r/${res.alias}`;
-      setResult(shortUrl);
+      setResult(res.alias);
+      setResultUrl(urlWithAlias(res.alias));
       setState("ok");
+      if (showOptions) toggleOptions();
+
       notifyOk("New link created");
     } catch (err) {
       setState("err");
@@ -71,82 +85,148 @@ export function MainView() {
     }
   };
 
-  const inputStatus = state === "idle" ? "" : state === "ok" ? "ok" : "err";
-  const firstButtonColor = state === "idle" ? "green" : state === "err" ? "green" : "indigo";
-  const readOnly = waiting || state === "ok";
+  const createCollection = async () => {
+    const ac = new AbortController();
+    const timeoutId = setTimeout(() => ac.abort(), 5_000);
+    try {
+      dismiss();
+      setWaiting(true);
+
+      const res = await postEmpty(`/api/collection/create/${encodeURIComponent(result)}`) as string;
+      window.location.assign(res);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        notifyErr("Server error", "Request timed out");
+        console.log("Timeout error");
+      } else {
+        const errMsg = err instanceof Error ? err.message : "Unknown error";
+        notifyErr("Could not create a collection", errMsg);
+        console.log(`Error: ${errMsg}`);
+      }
+    } finally {
+      setWaiting(false);
+      clearTimeout(timeoutId);
+    }
+  };
+
   const canSubmit = userUrl.trim().length > 0;
+  const readOnly = waiting || state === "ok";
   return (
-    <>
-      <Box data-status={inputStatus} className="inputField">
-        <TextField.Root
-          value={state === "ok" ? result : userUrl}
-          readOnly={readOnly}
-          style={{ width: "40rem", }}
-          onChange={(ev) => setUserUrl(ev.target.value)
-          }
-        >
-          <TextField.Slot><Link2Icon /></TextField.Slot>
-          <TextField.Slot>
-            <IconButton disabled={readOnly} variant="ghost" onClick={() => {
-              setUrlName("");
-              setShowOptions(!showOptions);
-            }}>
-              <DotsHorizontalIcon />
-            </IconButton>
-          </TextField.Slot>
-        </TextField.Root >
-        {showOptions && (
-          <Box>
-            <TextField.Root
-              placeholder="Pick a short name for your URL"
-              value={urlName}
-              onChange={(ev) => setUrlName(ev.target.value)}
-            />
-            <TextField.Root
-              placeholder="Password (optional)"
-              type="password"
-              value={userPassword}
-              onChange={(ev) => setUserPassword(ev.target.value)}
-              style={{ marginTop: "0.5rem" }}
-            />
-          </Box>
-        )}
-      </Box>
-      <Box>
-        <Button color={firstButtonColor} loading={waiting} disabled={!canSubmit} onClick={async () => {
+    <Box style={{ position: "relative" }}>
+      <Flex align="center" gap="2">
+        <Box data-status={state} className="inputField" style={{ width: "30rem" }}>
+
+          {/* URL window */}
+          <TextField.Root
+            value={state === "ok" ? resultUrl : userUrl}
+            readOnly={readOnly}
+            onChange={(e) => setUserUrl(e.target.value)}
+            placeholder="Paste a URL"
+            size="3"
+          >
+            <TextField.Slot>
+              <Link2Icon />
+            </TextField.Slot>
+
+            <TextField.Slot>
+              <Tooltip content="Copy to clipboard">
+                <IconButton
+                  variant="ghost"
+                  disabled={state !== "ok"}
+                  onClick={() => {
+                    clipboardCopy(resultUrl);
+                    notifyShort("Copied to clipboard");
+                  }}>
+                  <ClipboardIcon />
+                </IconButton>
+              </Tooltip>
+            </TextField.Slot>
+          </TextField.Root>
+        </Box>
+
+        {/* main button */}
+        {(() => {
           switch (state) {
-            case "idle": {
-              await submit();
-              setShowOptions(false);
-              break;
-            }
-            case "ok": {
-              await clipboardCopy(result);
-              notifyShort("Copied to clipboard!");
-              break;
-            }
-            case "err": {
-              await submit();
-              setShowOptions(false);
-              break;
-            }
+            case "idle":
+              return (
+                <Button
+                  color="green"
+                  loading={waiting}
+                  disabled={!canSubmit}
+                  onClick={shortenUrl}
+                >
+                  <PaperPlaneIcon />Shorten
+                </Button>
+              );
+
+            case "err":
+              return (
+                <Button
+                  loading={waiting}
+                  disabled={!canSubmit}
+                  onClick={shortenUrl}
+                >
+                  <ReloadIcon />Retry
+                </Button>
+              );
+
+            case "ok":
+              return (
+                <Button
+                  loading={waiting}
+                  onClick={createCollection}
+                >
+                  <PlusIcon />Collection
+                </Button>
+              );
           }
-        }}>
-          {state === "idle" ? (
-            <PaperPlaneIcon />
-          ) : state === "err" ? (
-            <ReloadIcon />
-          ) : (
-            <ClipboardIcon />
-          )}
+        })()}
+
+        {/* options button */}
+        <Button variant={showOptions ? "solid" : "soft"} disabled={readOnly} onClick={toggleOptions}>
+          <DotsHorizontalIcon />Options
         </Button>
 
-        <Button color="red" disabled={!(userUrl || urlName || result) || waiting} onClick={() => {
-          clearState();
-        }}>
-          <EraserIcon />
-        </Button>
-      </Box >
-    </>
+        {/* reset button */}
+        <Tooltip content="Reset">
+          <IconButton color="red" radius="full" disabled={!(userUrl || linkAlias || linkPassword || resultUrl) || waiting} onClick={clearState}>
+            <ResetIcon />
+          </IconButton>
+        </Tooltip>
+
+      </Flex>
+
+      {/* options */}
+      {showOptions && (
+        <Box
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: 0,
+            right: 0,
+            marginTop: 8,
+            zIndex: 20,
+          }}
+        >
+          <Card size="2">
+            <Flex direction="column" gap="2">
+              <TextField.Root
+                placeholder="Use a custom alias"
+                readOnly={waiting}
+                value={linkAlias}
+                onChange={(e) => setLinkAlias(e.target.value)}
+              />
+              <TextField.Root
+                placeholder="Set password"
+                type="password"
+                readOnly={waiting}
+                value={linkPassword}
+                onChange={(e) => setLinkPassword(e.target.value)}
+              />
+            </Flex>
+          </Card>
+        </Box>
+      )}
+    </Box>
   );
 }
