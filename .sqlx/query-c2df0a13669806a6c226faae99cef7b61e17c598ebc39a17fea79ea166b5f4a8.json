@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM links\n        WHERE user_id = $1\n          AND alias = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c2df0a13669806a6c226faae99cef7b61e17c598ebc39a17fea79ea166b5f4a8"
+}

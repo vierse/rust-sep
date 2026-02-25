@@ -1,0 +1,48 @@
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE links (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    alias TEXT UNIQUE,
+    kind TEXT NOT NULL DEFAULT 'redirect' CHECK(kind IN ('redirect', 'collection')),
+    target_url TEXT,
+    user_id BIGINT,
+    password_hash TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen DATE NOT NULL DEFAULT CURRENT_DATE,
+
+    CONSTRAINT links_shape_check CHECK (
+        (kind = 'redirect' AND target_url IS NOT NULL)
+        OR
+        (kind = 'collection' AND target_url IS NULL)
+    ),
+
+    CONSTRAINT links_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE INDEX links_user_id_idx ON links (user_id);
+
+CREATE TABLE collection_items (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    link_id BIGINT NOT NULL REFERENCES links(id) ON DELETE CASCADE,
+    position INT NOT NULL CHECK (position >= 0),
+    target_url TEXT NOT NULL,
+    title TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    -- also creates a unique index
+    CONSTRAINT collection_items_link_pos_unique UNIQUE (link_id, position)
+);
+
+CREATE TABLE link_metrics (
+    day DATE NOT NULL,
+    link_id BIGINT NOT NULL REFERENCES links(id) ON DELETE CASCADE,
+    hits BIGINT NOT NULL DEFAULT 0,
+    last_access TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (day, link_id)
+) PARTITION BY RANGE (day);

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO links_main (alias, url, user_id, password_hash)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (alias) DO NOTHING\n        RETURNING alias\n        ",
+  "query": "\n        INSERT INTO links (alias, target_url, user_id, password_hash)\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (alias) DO NOTHING\n        RETURNING alias\n        ",
   "describe": {
     "columns": [
       {
@@ -21,5 +21,5 @@
       true
     ]
   },
-  "hash": "6e52d214cdbbbb45e98f457ea6b4072c0edd958e1a46c42be285b833cd58fe05"
+  "hash": "ad4ed1b1ac337d95a293611cd6f5e709bbc8eb7cf7a47188adb798b2352d2159"
 }

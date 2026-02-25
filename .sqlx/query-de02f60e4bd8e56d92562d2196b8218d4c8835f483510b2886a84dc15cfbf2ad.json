@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO collection_items (link_id, position, target_url, title)\n                VALUES ($1, 0, $2, NULL)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "de02f60e4bd8e56d92562d2196b8218d4c8835f483510b2886a84dc15cfbf2ad"
+}

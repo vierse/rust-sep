@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH expired AS (\n                SELECT id\n                FROM links\n                WHERE last_seen < (CURRENT_DATE - $1::int)\n                ORDER BY id\n                LIMIT $2\n            ),\n            deleted AS (\n                DELETE FROM links\n                USING expired\n                WHERE links.id = expired.id\n                RETURNING 1\n            )\n            SELECT COUNT(*)::bigint AS \"deleted_count!: i64\"\n            FROM deleted;\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "deleted_count!: i64",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "485c668f6b9793808e03cd5b77cc4ff943609426349a9f02e43cf8cbd5ff31fe"
+}
