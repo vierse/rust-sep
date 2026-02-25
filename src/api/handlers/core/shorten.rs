@@ -1,9 +1,10 @@
 use axum::{
     Json,
     extract::State,
-    http::{HeaderValue, StatusCode, header},
+    http::StatusCode,
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::CookieJar;
 use cookie::Cookie;
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
@@ -34,35 +35,66 @@ impl IntoResponse for ShortenResponse {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct OwnerToken {
-    link_id: i64,
-    exp: i64,
-}
+pub struct OwnerToken(Vec<(i64, i64)>);
 
 impl OwnerToken {
-    const TTL_SECS: i64 = 24 * 60 * 60; // 1 hour
+    const MAX_OWNERS: usize = 50;
+    const TTL_SECS: i64 = 24 * 60 * 60; // 24 hours
 
-    fn new(link_id: i64, now_s: i64) -> Self {
-        Self {
-            link_id,
-            exp: now_s + Self::TTL_SECS,
-        }
+    pub fn is_owner(&self, link_id: i64, now_s: i64) -> bool {
+        self.0
+            .iter()
+            .any(|(id, exp)| *id == link_id && *exp > now_s)
     }
 
-    pub fn link_id(&self) -> i64 {
-        self.link_id
+    pub fn remaining_secs(&self, link_id: i64, now_s: i64) -> Option<i64> {
+        self.0
+            .iter()
+            .find(|(id, _)| *id == link_id)
+            .and_then(|(_, exp)| (*exp > now_s).then_some(*exp - now_s))
+    }
+
+    fn empty() -> Self {
+        Self(Vec::new())
+    }
+
+    fn update(&mut self, link_id: i64, now_s: i64) {
+        // prune expired owners
+        self.0.retain(|(_, exp)| *exp > now_s);
+
+        let owner = (link_id, now_s + Self::TTL_SECS);
+
+        // refresh if owner exists
+        if let Some(existing) = self.0.iter_mut().find(|(id, _)| *id == link_id) {
+            *existing = owner;
+            return;
+        }
+
+        if self.0.len() >= Self::MAX_OWNERS {
+            // prune the oldest
+            if let Some((idx, _)) = self.0.iter().enumerate().min_by_key(|(_, (_, exp))| *exp) {
+                self.0.swap_remove(idx);
+            }
+        }
+
+        self.0.push(owner);
+    }
+
+    fn max_exp(&self) -> Option<i64> {
+        self.0.iter().map(|(_, exp)| *exp).max()
     }
 }
 
 impl Token for OwnerToken {
-    const TYPE: &'static str = "owner_token";
+    const TYPE: &'static str = "owner";
 
     fn exp(&self) -> i64 {
-        self.exp
+        self.max_exp().unwrap_or(0)
     }
 }
 
 pub async fn shorten(
+    jar: CookieJar,
     MaybeUser(session_id_opt): MaybeUser,
     State(app): State<AppState>,
     Json(ShortenRequest {
@@ -70,7 +102,7 @@ pub async fn shorten(
         alias,
         password,
     }): Json<ShortenRequest>,
-) -> Result<Response, ApiError> {
+) -> Result<(CookieJar, Response), ApiError> {
     app.usage_metrics.log(Category::Shorten);
 
     let url: Url = url.try_into()?;
@@ -113,30 +145,31 @@ pub async fn shorten(
         }
     };
 
-    let mut response = ShortenResponse {
-        alias: alias.clone(),
-    }
-    .into_response();
+    let response = ShortenResponse { alias }.into_response();
 
     let now = OffsetDateTime::now_utc();
     let now_s = now.unix_timestamp();
-    let token = OwnerToken::new(link_id, now_s);
+
+    let mut token = match jar.get(OwnerToken::TYPE) {
+        Some(cookie) => app
+            .signer
+            .verify_token(cookie.value(), now_s)
+            .unwrap_or_else(|_| OwnerToken::empty()),
+        None => OwnerToken::empty(),
+    };
+    token.update(link_id, now_s);
+
     let signed_token = app.signer.sign_token(&token)?;
 
-    let cookie = Cookie::build(("owner_token", signed_token))
+    let cookie = Cookie::build((OwnerToken::TYPE, signed_token))
         .http_only(true)
         .secure(false)
         .path("/")
         .same_site(cookie::SameSite::Lax)
-        .max_age(Duration::hours(1))
-        .expires(now + Duration::hours(1))
+        .max_age(Duration::seconds(OwnerToken::TTL_SECS))
+        .expires(now + Duration::seconds(OwnerToken::TTL_SECS))
         .build();
+    let jar = jar.add(cookie);
 
-    let header_val = HeaderValue::from_str(&cookie.to_string()).expect("Could not build a cookie");
-
-    response
-        .headers_mut()
-        .append(header::SET_COOKIE, header_val);
-
-    Ok(response)
+    Ok((jar, response))
 }
