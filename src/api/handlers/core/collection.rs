@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 
 use crate::{
     api::{
@@ -56,7 +57,8 @@ pub async fn collection_list(
     app.metrics.record_hit(link.id);
 
     // check if user can edit the collection
-    let edit = owner_token.map_or(false, |t| link.id == t.link_id());
+    let now_s = OffsetDateTime::now_utc().unix_timestamp();
+    let edit = owner_token.map_or(false, |t| t.is_owner(link.id, now_s));
     Ok(Json(CollectionResponse {
         alias: alias.as_str().to_owned(),
         items,
@@ -77,7 +79,8 @@ pub async fn collection_create(
     let alias: LinkAlias = alias.try_into()?;
     let link = super::fetch_link(&alias, &app).await?;
 
-    if link.id != token.link_id() {
+    let now_s = OffsetDateTime::now_utc().unix_timestamp();
+    if !token.is_owner(link.id, now_s) {
         return Err(ApiError::unauthorized());
     }
 
@@ -115,7 +118,8 @@ pub async fn collection_add_url(
 
     let link = super::fetch_link(&alias, &app).await?;
 
-    if link.id != token.link_id() {
+    let now_s = OffsetDateTime::now_utc().unix_timestamp();
+    if !token.is_owner(link.id, now_s) {
         return Err(ApiError::unauthorized());
     }
 
