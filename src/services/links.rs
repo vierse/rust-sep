@@ -19,6 +19,8 @@ pub enum LinkError {
     AlreadyExists,
     #[error("alias not found")]
     NotFound,
+    #[error("alphabet was exhausted")]
+    GeneratorError,
 }
 
 /// Create a new link for the provided URL
@@ -33,7 +35,7 @@ pub async fn create_link(
     user_id: Option<UserId>,
     password: Option<&str>,
     hasher: &Argon2<'_>,
-) -> Result<String, ServiceError> {
+) -> Result<(i64, String), ServiceError> {
     let password_hash = password
         .filter(|p| !p.is_empty())
         .map(|p| hash_password(p, hasher))
@@ -41,13 +43,30 @@ pub async fn create_link(
     let password_hash_ref = password_hash.as_deref();
 
     let mut tx = pool.begin().await?;
-    // Insert the url into database to get a unique id
+
+    // reserve unique ID
+    let seq = sqlx::query!(
+        r#"
+        SELECT nextval(pg_get_serial_sequence('links', 'id')) AS "id!"
+        "#
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let id = seq.id;
+
+    let alias = generator
+        .encode(&[id as u64])
+        .context("Sqids alphabet was exhausted")?;
+
     let rec = sqlx::query!(
         r#"
-        INSERT INTO links (target_url, user_id, password_hash)
-        VALUES ($1, $2, $3)
-        RETURNING id
+        INSERT INTO links (id, alias, target_url, user_id, password_hash)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, alias
         "#,
+        id,
+        alias,
         url.as_str(),
         user_id,
         password_hash_ref,
@@ -55,31 +74,9 @@ pub async fn create_link(
     .fetch_one(&mut *tx)
     .await?;
 
-    let id = rec.id as u64;
-
-    let alias = generator
-        .encode(&[id])
-        .context("Sqids alphabet was exhausted")?;
-
-    // Update the record with generated alias
-    let updated = sqlx::query!(
-        r#"
-        UPDATE links
-        SET alias = $1
-        WHERE id = $2
-        RETURNING alias
-        "#,
-        alias,
-        rec.id
-    )
-    .fetch_one(&mut *tx)
-    .await?;
-
     tx.commit().await?;
 
-    let alias = updated.alias.context("Updated record contained no alias")?;
-
-    Ok(alias)
+    Ok((rec.id, rec.alias))
 }
 
 /// Create a link with user-defined alias for the provided URL
@@ -96,7 +93,7 @@ pub async fn create_link_with_alias(
     user_id: Option<UserId>,
     password: Option<&str>,
     hasher: &Argon2<'_>,
-) -> Result<String, ServiceError> {
+) -> Result<(i64, String), ServiceError> {
     let password_hash = password
         .filter(|p| !p.is_empty())
         .map(|p| hash_password(p, hasher))
@@ -108,7 +105,7 @@ pub async fn create_link_with_alias(
         INSERT INTO links (alias, target_url, user_id, password_hash)
         VALUES ($1, $2, $3, $4)
         ON CONFLICT (alias) DO NOTHING
-        RETURNING alias
+        RETURNING alias, id
         "#,
         alias.as_str(),
         url.as_str(),
@@ -118,10 +115,9 @@ pub async fn create_link_with_alias(
     .fetch_optional(pool)
     .await?;
 
-    match rec_opt {
-        Some(rec) => Ok(rec.alias.unwrap()),
-        None => Err(LinkError::AlreadyExists.into()),
-    }
+    rec_opt
+        .map(|rec| (rec.id, rec.alias))
+        .ok_or(LinkError::AlreadyExists.into())
 }
 
 /// Query url from database
@@ -182,7 +178,7 @@ pub async fn query_links_by_user_id(
     let links = rec_vec
         .into_iter()
         .map(|rec| LinkItem {
-            alias: rec.alias.unwrap_or_default(),
+            alias: rec.alias,
             url: rec.target_url.unwrap(),
         })
         .collect();
@@ -192,7 +188,7 @@ pub async fn query_links_by_user_id(
 
 /// Remove user's link
 #[tracing::instrument(name = "services::remove_user_link", skip(pool))]
-pub async fn remove_user_link(
+pub async fn delete_link_for_user(
     user_id: &UserId,
     alias: &Alias,
     pool: &PgPool,
@@ -210,25 +206,4 @@ pub async fn remove_user_link(
     .await?;
 
     Ok(())
-}
-
-#[tracing::instrument(name = "app::recently_added_links", skip(pool))]
-pub async fn recently_added_links(limit: i64, pool: &PgPool) -> Result<Vec<String>, ServiceError> {
-    let recs = sqlx::query!(
-        r#"
-        SELECT target_url
-        FROM links
-        ORDER BY id DESC
-        LIMIT $1
-        "#,
-        limit
-    )
-    .fetch_all(pool)
-    .await
-    .context("DB select recent links query failed")?;
-
-    Ok(recs
-        .into_iter()
-        .map(|rec| rec.target_url.unwrap())
-        .collect())
 }

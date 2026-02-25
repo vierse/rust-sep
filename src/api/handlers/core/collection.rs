@@ -40,7 +40,7 @@ pub async fn collection_list(
     let link = super::fetch_link(&alias, &app).await?;
 
     // check if user has a matching token
-    let unlocked = unlock_token.map_or(false, |t| t.alias == alias.as_str());
+    let unlocked = unlock_token.map_or(false, |t| link.id == t.link_id());
     if link.password_hash.is_some() && !unlocked {
         return Ok(LockedResponse {
             unlock: format!("/unlock/{}", alias.as_str()),
@@ -56,7 +56,7 @@ pub async fn collection_list(
     app.metrics.record_hit(link.id);
 
     // check if user can edit the collection
-    let edit = owner_token.map_or(false, |t| t.alias == alias.as_str());
+    let edit = owner_token.map_or(false, |t| link.id == t.link_id());
     Ok(Json(CollectionResponse {
         alias: alias.as_str().to_owned(),
         items,
@@ -74,11 +74,13 @@ pub async fn collection_create(
         return Err(ApiError::unauthorized());
     };
 
-    if token.alias != alias {
+    let alias: Alias = alias.try_into()?;
+    let link = super::fetch_link(&alias, &app).await?;
+
+    if link.id != token.link_id() {
         return Err(ApiError::unauthorized());
     }
 
-    let alias: Alias = alias.try_into()?;
     services::convert_to_collection(&alias, &app.pool).await?;
 
     Ok((
@@ -109,11 +111,14 @@ pub async fn collection_add_url(
         return Err(ApiError::unauthorized());
     };
 
-    if token.alias != alias {
+    let alias: Alias = alias.try_into()?;
+
+    let link = super::fetch_link(&alias, &app).await?;
+
+    if link.id != token.link_id() {
         return Err(ApiError::unauthorized());
     }
 
-    let alias: Alias = alias.try_into()?;
     let url: Url = url.try_into()?;
 
     services::add_url_to_collection(&alias, &url, title.as_deref(), &app.pool).await?;

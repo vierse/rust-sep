@@ -90,6 +90,7 @@ impl From<LinkError> for ApiError {
                 Self::public(StatusCode::CONFLICT, "This alias already exists")
             }
             LinkError::NotFound => Self::not_found(),
+            _ => Self::internal(),
         }
     }
 }
