@@ -86,6 +86,9 @@ pub async fn collection_create(
 
     services::convert_to_collection(&alias, &app.pool).await?;
 
+    // invalidate cache entry
+    app.cache.invalidate(&alias).await;
+
     Ok((
         StatusCode::CREATED,
         Json(format!("/collection/{}", alias.as_str())),

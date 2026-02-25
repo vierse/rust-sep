@@ -32,6 +32,9 @@ pub async fn remove_user_link(
     let session = app.sessions.get_session_data(&session_id)?;
     services::delete_link_for_user(&session.user_id, &alias, &app.pool).await?;
 
+    // invalidate cache entry
+    app.cache.invalidate(&alias).await;
+
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
