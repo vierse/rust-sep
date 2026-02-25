@@ -90,7 +90,7 @@ export function CollectionView({ alias }: { alias: string }) {
       );
 
       const data = await getReq<CollectionResponse>(
-        `/api/collection/list/${encodeURIComponent(alias)}`
+        `/api/collection/${encodeURIComponent(alias)}/list`
       );
 
       setItems(data.items);
