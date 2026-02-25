@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT COALESCE(MAX(position) + 1, 0)::INT AS \"next_position!\"\n                FROM collection_items\n                WHERE link_id = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "next_position!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "50a61baf12e1468c758f1e3ee5447cd4ffd29e74230d46ae7b028e933d5bff56"
+}

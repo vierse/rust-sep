@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE links\n                SET kind = 'collection',\n                    target_url = NULL,\n                    updated_at = now()\n                WHERE id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c3cface837a446a176942565fe43d78ba3faed4354838a20d602e495c86ac0f5"
+}

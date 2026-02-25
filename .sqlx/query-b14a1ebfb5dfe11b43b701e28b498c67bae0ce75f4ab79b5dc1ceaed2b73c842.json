@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO users_main (username, password_hash)\n        VALUES ($1, $2)\n        ON CONFLICT (username) DO NOTHING\n        RETURNING id\n        ",
+  "query": "\n        INSERT INTO links (target_url, user_id, password_hash)\n        VALUES ($1, $2, $3)\n        RETURNING id\n        ",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,7 @@
     "parameters": {
       "Left": [
         "Text",
+        "Int8",
         "Text"
       ]
     },
@@ -19,5 +20,5 @@
       false
     ]
   },
-  "hash": "8e45b8649b623779705a56fa12a04393f8ee1ecd99a43dba322fc918817821ad"
+  "hash": "b14a1ebfb5dfe11b43b701e28b498c67bae0ce75f4ab79b5dc1ceaed2b73c842"
 }
