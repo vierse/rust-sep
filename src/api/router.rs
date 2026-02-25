@@ -40,7 +40,6 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/user", user_api)
         .nest("/collection", collection_api)
         .route("/shorten", post(handlers::shorten))
-        .route("/recent", get(handlers::recently_added_links))
         .route("/unlock/{alias}", post(handlers::unlock));
 
     // assemble everything

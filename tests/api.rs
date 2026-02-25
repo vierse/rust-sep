@@ -3,7 +3,7 @@ use axum::{
     http::{Request, StatusCode, header::LOCATION},
     response::Response,
 };
-use serde::de::DeserializeOwned;
+use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::json;
 use sqlx::PgPool;
 use time::{Duration, OffsetDateTime};
@@ -12,12 +12,14 @@ use tower::ServiceExt;
 use axum::Router;
 
 use url_shorten::{
-    api::{
-        self,
-        handlers::{EXPIRY_DAYS, UNLOCK_PATH},
-    },
+    api::{self, handlers::EXPIRY_DAYS},
     app,
 };
+
+#[derive(Deserialize)]
+struct ShortenResponse {
+    alias: String,
+}
 
 // Deserialize a Response into T
 async fn json<T: DeserializeOwned>(response: Response) -> T {
@@ -53,7 +55,7 @@ async fn shorten_and_redirect(pool: PgPool) {
     );
 
     // Parse the returned alias
-    let api::handlers::ShortenResponse { alias } = json(response).await;
+    let ShortenResponse { alias } = json(response).await;
 
     // Make a GET request to /r/{alias}
     let request_body = Body::empty();
@@ -102,7 +104,7 @@ async fn save_named_and_redirect(pool: PgPool) {
     );
 
     // Parse the returned alias
-    let api::handlers::ShortenResponse { alias } = json(response).await;
+    let ShortenResponse { alias } = json(response).await;
     assert_eq!(alias, TEST_ALIAS, "Response alias does not match request");
 
     // Make a GET request to /r/{alias}
@@ -286,7 +288,7 @@ async fn password_protected_link_unlock(pool: PgPool) {
     let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
     assert_eq!(
         location,
-        format!("/{}/{}", UNLOCK_PATH, TEST_ALIAS),
+        format!("/unlock/{}", TEST_ALIAS),
         "Expected Location header to point to unlock prompt"
     );
 
