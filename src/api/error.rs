@@ -68,8 +68,8 @@ impl IntoResponse for ApiError {
 }
 
 impl From<TokenError> for ApiError {
-    fn from(_error: TokenError) -> Self {
-        Self::internal()
+    fn from(_: TokenError) -> Self {
+        Self::unauthorized()
     }
 }
 
@@ -129,23 +129,22 @@ impl From<UrlParseError> for ApiError {
 impl From<LinkAliasError> for ApiError {
     fn from(error: LinkAliasError) -> Self {
         match error {
+            LinkAliasError::InvalidChars => {
+                Self::public(StatusCode::BAD_REQUEST, "Alias contains invalid characters")
+            }
             LinkAliasError::TooShort => Self::public(
                 StatusCode::BAD_REQUEST,
                 formatcp!(
-                    "Chosen link must be at least {} characters",
+                    "Alias must be at least {} characters",
                     LinkAlias::MIN_ALIAS_LENGTH
                 ),
             ),
             LinkAliasError::TooLong => Self::public(
                 StatusCode::BAD_REQUEST,
                 formatcp!(
-                    "Chosen link cannot contain more than {} characters",
+                    "Alias cannot contain more than {} characters",
                     LinkAlias::MAX_ALIAS_LENGTH
                 ),
-            ),
-            LinkAliasError::InvalidChars => Self::public(
-                StatusCode::BAD_REQUEST,
-                "Chosen link contains invalid characters",
             ),
         }
     }

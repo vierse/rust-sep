@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use argon2::Argon2;
+use metrics_exporter_prometheus::PrometheusBuilder;
 use moka::future::Cache;
 use sqids::Sqids;
 use sqlx::{PgPool, postgres::PgPoolOptions};
@@ -110,7 +111,7 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
     // Initialize Sqids generator
     let sqids = Arc::new(
         Sqids::builder()
-            .min_length(LinkAlias::MIN_ALIAS_LENGTH as u8)
+            .min_length(LinkAlias::MIN_RANDOM_ALIAS_LENGTH as u8)
             .alphabet(ALPHABET.chars().collect())
             .build()?,
     );
@@ -138,6 +139,12 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
 }
 
 pub async fn run(config: Settings) -> Result<()> {
+    // metrics endpoint
+    PrometheusBuilder::new()
+        .with_http_listener(([0, 0, 0, 0], 9000))
+        .install()
+        .expect("failed to install prometheus recorder");
+
     let pool = connect_to_db(config.database_url.as_str()).await?;
 
     let metrics = Arc::new(LinkMetrics::new());

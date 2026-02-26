@@ -9,14 +9,14 @@ pub async fn request_metrics_mw(req: Request<Body>, next: Next) -> Response {
         .extensions()
         .get::<MatchedPath>()
         .map(|m| m.as_str().to_owned())
-        .unwrap_or_else(|| "unknown".to_owned())
+        .unwrap_or("unknown".to_owned())
         .into();
 
-    let method: SharedString = req.method().as_str().to_string().into();
+    let method: SharedString = req.method().as_str().to_owned().into();
 
     let res = next.run(req).await;
 
-    let status_class: &'static str = match res.status().as_u16() / 100 {
+    let status_class = match res.status().as_u16() / 100 {
         2 => "2xx",
         3 => "3xx",
         4 => "4xx",
@@ -25,7 +25,7 @@ pub async fn request_metrics_mw(req: Request<Body>, next: Next) -> Response {
     };
 
     metrics::counter!(
-        "http_requests_total",
+        "requests_total",
         "method" => method.clone(),
         "route" => route.clone(),
         "status" => status_class,
@@ -33,7 +33,7 @@ pub async fn request_metrics_mw(req: Request<Body>, next: Next) -> Response {
     .increment(1);
 
     metrics::histogram!(
-        "http_request_duration_seconds",
+        "request_duration_seconds",
         "method" => method,
         "route" => route,
     )

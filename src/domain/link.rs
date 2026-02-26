@@ -12,6 +12,7 @@ pub enum LinkAliasError {
 
 impl LinkAlias {
     pub const MIN_ALIAS_LENGTH: usize = 4;
+    pub const MIN_RANDOM_ALIAS_LENGTH: usize = 6;
     pub const MAX_ALIAS_LENGTH: usize = 64;
 
     pub fn as_str(&self) -> &str {

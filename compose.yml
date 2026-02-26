@@ -64,7 +64,7 @@ services:
     ports:
       - "8089:8089"
     command: >
-      -f locustfile.py --host http://app-locust:${APP_PORT} --processes 4
+      -f locustfile.py --host http://app-locust:${APP_PORT} --processes 8
 
   prometheus:
     image: prom/prometheus:v3.10.0
