@@ -137,7 +137,7 @@ class BaseUser(FastHttpUser):
 
 
 class CoreUser(BaseUser):
-    weight = 800
+    weight = 900
     wait_time = constant_throughput(1)
 
     @task(80)
@@ -155,13 +155,12 @@ class CoreUser(BaseUser):
         self._shorten(url)
 
 
-
 class AuthUser(BaseUser):
-    weight = 180
+    weight = 300
     wait_time = between(5,15)
 
     def on_start(self):
-        self.username = f"{random_string(10)}@test.local"
+        self.username = random_string(10)
         self.password = random_string(16)
         self.account = False
 
@@ -194,25 +193,25 @@ class AuthUser(BaseUser):
 
 
 class UnlockUser(BaseUser):
-    weight = 20
+    weight = 50
     wait_time = between(5, 15)
 
     @task
     def protected_links_flow(self):
         url = sample_url_uniform()
-        alias = None
         password = random_string(16)
 
         # create protected link
         alias = self._shorten(url, password=password)
         if alias is None:
             return
-        
-        # trigger unlock prompt
+
+        # unlock redirect
         with self.rest("GET", f"/r/{alias}", allow_redirects=False, name="/r/") as resp:
             if resp.status_code != 307:
                 resp.failure(f"expected 307, got {resp.status_code}")
-        
+                return
+
             unlock_loc = resp.headers.get("Location")
             if not unlock_loc:
                 resp.failure("missing Location header on 307 response")
@@ -221,11 +220,26 @@ class UnlockUser(BaseUser):
             expected = f"/unlock/{alias}"
             if unlock_loc != expected:
                 resp.failure(f"expected Location {expected} got {unlock_loc}")
-        
-        # unlock the protected link
+                return
+
+        # trigger unlock
         with self.rest("POST", f"/api/unlock/{alias}", json={"password": password}, name="/api/unlock/") as resp:
-            if resp.status_code != 200:
-                resp.failure(f"expected 200, got {resp.status_code}")
-            
-            if resp.js.get("url") != url:
-                resp.failure(f"did not get matching url")
+            if resp.status_code != 204 and resp.status_code != 200:
+                resp.failure(f"expected 200/204, got {resp.status_code} {resp.text}")
+                return
+
+            set_cookie = resp.headers.get("Set-Cookie")
+            if not set_cookie:
+                resp.failure("missing Set-Cookie)")
+                return
+
+        # final redirect
+        with self.rest("GET", f"/r/{alias}", allow_redirects=False, name="/r/") as resp:
+            if resp.status_code != 307:
+                resp.failure(f"expected 307 after unlock, got {resp.status_code} {resp.text}")
+                return
+
+            loc = resp.headers.get("Location")
+            if not loc:
+                resp.failure("missing Location header after unlock redirect")
+                return
