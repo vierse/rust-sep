@@ -20,7 +20,6 @@ use crate::{
 
 pub enum SessionError {
     NotExists,
-    Expired,
 }
 
 pub struct SessionData {
