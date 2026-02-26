@@ -12,7 +12,7 @@ use crate::{
     api::error::ApiError,
     app::{
         AppState,
-        usage_metrics::{Category, CategorySet},
+        usage_metrics::{Category, CategorySet, HourSet},
     },
 };
 
@@ -114,6 +114,7 @@ impl MetricsCat {
 #[derive(Debug, Deserialize)]
 pub struct Params {
     weekdays: String,
+    hours: Option<String>,
 }
 
 pub async fn metrics(
@@ -130,22 +131,55 @@ pub async fn metrics(
 
     let mut resp: HashMap<&'static str, _> = HashMap::new();
 
-    for (day_idx, day_it) in app
-        .usage_metrics
-        .total_usage_by_day_in_bitset(CategorySet::from_raw(cats.0))
-        .enumerate()
-    {
-        for (cat_hits, cat) in day_it.zip(cats.iter()) {
-            let cat_name = cat.as_str();
-            resp.entry(cat_name).or_insert(vec![0; 7])[day_idx] = cat_hits;
+    if let Some(hours) = params.hours {
+        let mut hours = hours.split(',').map(|h| h.parse());
+
+        let Ok(hours) = hours.try_fold(
+            HourSet::new(),
+            |mut set, hour| -> Result<_, <usize as FromStr>::Err> { Ok(set.set(hour?)) },
+        ) else {
+            return Err(ApiError::public(
+                StatusCode::BAD_REQUEST,
+                "hour wasn't given in number",
+            ));
+        };
+
+        let it = app
+            .usage_metrics
+            .total_usage_by_day_in_hours_bitset(CategorySet::from_raw(cats.0), hours);
+
+        for (day_idx, day_it) in it.enumerate() {
+            for (cat_hits, cat) in day_it.zip(cats.iter()) {
+                let cat_name = cat.as_str();
+                resp.entry(cat_name).or_insert(vec![0; 7])[day_idx] = cat_hits;
+            }
         }
-    }
 
-    if cats.is_set(MetricsCat::Total) {
-        let hits: Vec<_> = app.usage_metrics.total_usage_daily().collect();
+        if cats.is_set(MetricsCat::Total) {
+            let hits: Vec<_> = app
+                .usage_metrics
+                .total_usage_daily_in_hours(hours)
+                .collect();
 
-        resp.insert("total", hits);
-    }
+            resp.insert("total", hits);
+        }
+    } else {
+        let it = app
+            .usage_metrics
+            .total_usage_by_day_in_bitset(CategorySet::from_raw(cats.0));
+
+        for (day_idx, day_it) in it.enumerate() {
+            for (cat_hits, cat) in day_it.zip(cats.iter()) {
+                let cat_name = cat.as_str();
+                resp.entry(cat_name).or_insert(vec![0; 7])[day_idx] = cat_hits;
+            }
+        }
+        if cats.is_set(MetricsCat::Total) {
+            let hits: Vec<_> = app.usage_metrics.total_usage_daily().collect();
+
+            resp.insert("total", hits);
+        }
+    };
 
     Ok((StatusCode::OK, Json(resp)).into_response())
 }
