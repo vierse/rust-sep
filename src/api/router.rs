@@ -44,7 +44,8 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/user", user_api)
         .nest("/collection", collection_api)
         .route("/shorten", post(handlers::shorten))
-        .route("/unlock/{alias}", post(handlers::unlock));
+        .route("/unlock/{alias}", post(handlers::unlock))
+        .route("/info/{alias}", get(handlers::link_info));
 
     // assemble everything
     let api = Router::new()

@@ -11,6 +11,7 @@ import { CollectionCreator } from "./components/CollectionCreator";
 import { Link1Icon, RowsIcon } from "@radix-ui/react-icons";
 
 import React from "react";
+import { LinkInfoView } from "./components/LinkInfoView";
 
 type Mode = "single" | "collection";
 
@@ -22,6 +23,7 @@ export default function App() {
       <Switch>
         <Route path="/unlock/:alias">{(params) => <UnlockView alias={params.alias} />}</Route>
         <Route path="/collection/:alias">{(params) => <CollectionView alias={params.alias} />}</Route>
+        <Route path="/info/:alias">{(params) => <LinkInfoView alias={params.alias} />}</Route>
         <Route>
           <Flex align="center" justify="center" height="90vh" direction="column" gap="4">
             <Box style={{ position: "absolute", top: 16, right: 16, zIndex: 10 }}>

@@ -11,7 +11,7 @@ use argon2::Argon2;
 use moka::future::Cache;
 use sqids::Sqids;
 use sqlx::{PgPool, postgres::PgPoolOptions};
-use time::Date;
+use time::{Date, OffsetDateTime};
 use tokio::{net::TcpListener, time::timeout};
 use tokio_util::sync::CancellationToken;
 pub mod usage_metrics;
@@ -40,6 +40,7 @@ pub struct CachedLink {
     pub url: String,
     pub last_seen: Date,
     pub password_hash: Option<String>,
+    pub created_at: OffsetDateTime,
 }
 
 #[derive(Clone)]

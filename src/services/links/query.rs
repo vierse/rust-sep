@@ -29,7 +29,7 @@ pub async fn query_url_by_alias(
     pool: &PgPool,
 ) -> Result<Option<CachedLink>, ServiceError> {
     let rec_opt = sqlx::query!(
-        r#"SELECT id, kind, target_url, last_seen, password_hash FROM links WHERE alias = $1"#,
+        r#"SELECT id, kind, target_url, last_seen, password_hash, created_at FROM links WHERE alias = $1"#,
         alias.as_str()
     )
     .fetch_optional(pool)
@@ -48,6 +48,7 @@ pub async fn query_url_by_alias(
         url: rec.target_url.unwrap_or_default(),
         last_seen: rec.last_seen,
         password_hash: rec.password_hash,
+        created_at: rec.created_at,
     }))
 }
 

@@ -35,23 +35,23 @@ impl IntoResponse for ShortenResponse {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct OwnerToken(Vec<(i64, i64)>);
+pub struct OwnerToken(Vec<(i64, i64, i64)>);
 
 impl OwnerToken {
     const MAX_OWNERS: usize = 50;
     const TTL_SECS: i64 = 24 * 60 * 60; // 24 hours
 
-    pub fn is_owner(&self, link_id: i64, now_s: i64) -> bool {
+    pub fn is_owner(&self, link_id: i64, now_s: i64, created_at: i64) -> bool {
         self.0
             .iter()
-            .any(|(id, exp)| *id == link_id && *exp > now_s)
+            .any(|(id, exp, issued)| *id == link_id && *exp > now_s && *issued >= created_at)
     }
 
     pub fn remaining_secs(&self, link_id: i64, now_s: i64) -> Option<i64> {
         self.0
             .iter()
-            .find(|(id, _)| *id == link_id)
-            .and_then(|(_, exp)| (*exp > now_s).then_some(*exp - now_s))
+            .find(|(id, _, _)| *id == link_id)
+            .and_then(|(_, exp, _)| (*exp > now_s).then_some(*exp - now_s))
     }
 
     fn empty() -> Self {
@@ -60,19 +60,24 @@ impl OwnerToken {
 
     fn update(&mut self, link_id: i64, now_s: i64) {
         // prune expired owners
-        self.0.retain(|(_, exp)| *exp > now_s);
+        self.0.retain(|(_, exp, _)| *exp > now_s);
 
-        let owner = (link_id, now_s + Self::TTL_SECS);
+        let owner = (link_id, now_s + Self::TTL_SECS, now_s);
 
         // refresh if owner exists
-        if let Some(existing) = self.0.iter_mut().find(|(id, _)| *id == link_id) {
+        if let Some(existing) = self.0.iter_mut().find(|(id, _, _)| *id == link_id) {
             *existing = owner;
             return;
         }
 
         if self.0.len() >= Self::MAX_OWNERS {
             // prune the oldest
-            if let Some((idx, _)) = self.0.iter().enumerate().min_by_key(|(_, (_, exp))| *exp) {
+            if let Some((idx, _)) = self
+                .0
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, (_, exp, _))| *exp)
+            {
                 self.0.swap_remove(idx);
             }
         }
@@ -81,7 +86,7 @@ impl OwnerToken {
     }
 
     fn max_exp(&self) -> Option<i64> {
-        self.0.iter().map(|(_, exp)| *exp).max()
+        self.0.iter().map(|(_, exp, _)| *exp).max()
     }
 }
 
