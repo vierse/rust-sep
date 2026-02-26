@@ -12,7 +12,7 @@ import { TextField, Box, IconButton, Button } from "@radix-ui/themes";
 import React from "react";
 
 import { getReq } from "/src/api";
-import { CategorySelecter, allOptions } from "./CategorySelecter";
+import { CategorySelector, allOptions } from "./CategorySelector";
 
 ChartJS.register(
   CategoryScale,
@@ -68,7 +68,7 @@ export function MainView() {
       {catState.map((selectCount, index) => {
         const options = getOptionsToRender(catState, allOptions);
         return (
-            <CategorySelecter
+            <CategorySelector
               value={catState[index]}
               options={options}
               onSelect={(value) => onSelectValues(value, index)}
