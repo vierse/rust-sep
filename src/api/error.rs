@@ -12,6 +12,7 @@ use crate::{
     services::{LinkServiceError, ServiceError},
 };
 
+#[derive(Debug)]
 pub struct ApiError {
     status_code: StatusCode,
     reason: &'static str,
