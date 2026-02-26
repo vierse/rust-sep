@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            COALESCE(SUM(hits), 0)::BIGINT AS \"total_hits!\",\n            COALESCE(SUM(hits) FILTER (WHERE day = CURRENT_DATE), 0)::BIGINT AS \"hits_today!\",\n            COALESCE(\n                SUM(hits) FILTER (\n                    WHERE day >= (CURRENT_DATE - INTERVAL '29 days')\n                ),\n                0\n            )::BIGINT AS \"hits_last_30_days!\",\n            MAX(last_access) AS \"last_access?\"\n        FROM link_metrics\n        WHERE link_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_hits!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "hits_today!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "hits_last_30_days!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_access?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "9de51f869dde8dc77f63311ae071fa060d531010528f041a2aa3dcc42694624a"
+}
