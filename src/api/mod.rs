@@ -1,6 +1,7 @@
 mod error;
 mod extract;
 pub mod handlers;
+mod metrics;
 mod router;
 mod session;
 pub mod token;

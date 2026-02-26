@@ -12,12 +12,7 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     proxy: {
-      // route to axum (dev only)
       "/api": {
-        target: "http://localhost:3000",
-        changeOrigin: true,
-      },
-      "/metrics": {
         target: "http://localhost:3000",
         changeOrigin: true,
       },
@@ -28,12 +23,11 @@ export default defineConfig({
     },
   },
   plugins: [react()],
- 
+
   build: {
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        metrics: resolve(__dirname, 'metrics/index.html'),
       },
     },
   },

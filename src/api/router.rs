@@ -1,18 +1,32 @@
 use axum::{
     Router,
-    middleware::from_fn_with_state,
+    middleware::{from_fn, from_fn_with_state},
     routing::{delete, get, post},
 };
+use metrics_exporter_prometheus::PrometheusBuilder;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
-    api::{handlers, session},
+    api::{handlers, metrics, session},
     app::AppState,
 };
 
 const DIST_DIR: &str = "web/dist";
 
 pub fn build_router(state: AppState) -> Router {
+    let builder = PrometheusBuilder::new();
+    let handle = builder
+        .install_recorder()
+        .expect("failed to install recorder");
+
+    let metrics = Router::new().route(
+        "/metrics",
+        get(move || {
+            let handle = handle.clone();
+            async move { handle.render() }
+        }),
+    );
+
     // user API (auth required)
     let user_api = Router::new()
         .route("/list", get(handlers::list_user_links))
@@ -24,9 +38,6 @@ pub fn build_router(state: AppState) -> Router {
         .route("/me", get(handlers::authenticate_session))
         .route("/login", post(handlers::authenticate_user))
         .route("/register", post(handlers::create_user));
-
-    // metrics API
-    let metrics_api = Router::new().route("/data", get(handlers::metrics));
 
     // collection API
     let collection_api = Router::new()
@@ -50,13 +61,16 @@ pub fn build_router(state: AppState) -> Router {
     // assemble everything
     let api = Router::new()
         .nest("/api", core_api)
-        .nest("/metrics", metrics_api)
         .route("/r/{alias}", get(handlers::redirect))
         .route("/r/{alias}/{idx}", get(handlers::redirect_indexed))
         .with_state(state.clone())
+        .route_layer(from_fn(metrics::request_metrics_mw))
         .layer(from_fn_with_state(state, session::session_manager_mw)); // must be last
 
     // merge with assets
     let serve = ServeDir::new(DIST_DIR).fallback(ServeFile::new(format!("{DIST_DIR}/index.html")));
-    Router::new().merge(api).fallback_service(serve)
+    Router::new()
+        .merge(metrics)
+        .merge(api)
+        .fallback_service(serve)
 }

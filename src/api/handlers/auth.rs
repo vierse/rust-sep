@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     api::{error::ApiError, extract::RequireUser},
-    app::{AppState, usage_metrics::Category},
+    app::AppState,
     domain::{UserName, UserPassword},
     services,
 };
@@ -45,7 +45,6 @@ pub async fn authenticate_session(
     RequireUser(session_id): RequireUser,
     State(app): State<AppState>,
 ) -> Result<Response, ApiError> {
-    app.usage_metrics.log(Category::AuthenticateSession);
     let session = app.sessions.get_session_data(&session_id)?;
 
     Ok(AuthResponse {
@@ -58,8 +57,6 @@ pub async fn authenticate_user(
     State(app): State<AppState>,
     Json(AuthRequest { username, password }): Json<AuthRequest>,
 ) -> Result<Response, ApiError> {
-    app.usage_metrics.log(Category::AuthenticateUser);
-
     let username: UserName = username.try_into()?;
     let password: UserPassword = password.try_into()?;
 
