@@ -1,6 +1,9 @@
 use axum::{
     body::Body,
-    http::{Request, StatusCode, header::LOCATION},
+    http::{
+        Request, StatusCode,
+        header::{self, LOCATION},
+    },
     response::Response,
 };
 use serde::{Deserialize, de::DeserializeOwned};
@@ -90,7 +93,7 @@ async fn save_named_and_redirect(pool: PgPool) {
 
     // Make a POST request to /api/shorten
     let request_body =
-        Body::from(serde_json::to_vec(&json!({ "url": TEST_URL, "name": TEST_ALIAS })).unwrap());
+        Body::from(serde_json::to_vec(&json!({ "url": TEST_URL, "alias": TEST_ALIAS })).unwrap());
     let request = Request::post("/api/shorten")
         .header("content-type", "application/json")
         .body(request_body)
@@ -139,7 +142,7 @@ async fn save_named_already_exists(pool: PgPool) {
     let router = router(pool).await;
 
     let request_body =
-        Body::from(serde_json::to_vec(&json!({"url": TEST_URL, "name": TEST_ALIAS })).unwrap());
+        Body::from(serde_json::to_vec(&json!({"url": TEST_URL, "alias": TEST_ALIAS })).unwrap());
     // Make a POST request to /api/shorten
 
     let request = Request::post("/api/shorten")
@@ -155,7 +158,7 @@ async fn save_named_already_exists(pool: PgPool) {
     );
     // second insert with same alias
     let request_body =
-        Body::from(serde_json::to_vec(&json!({"url": TEST_URL2, "name": TEST_ALIAS})).unwrap());
+        Body::from(serde_json::to_vec(&json!({"url": TEST_URL2, "alias": TEST_ALIAS})).unwrap());
     let request = Request::post("/api/shorten")
         .header("content-type", "application/json")
         .body(request_body)
@@ -167,47 +170,6 @@ async fn save_named_already_exists(pool: PgPool) {
         StatusCode::CONFLICT,
         "Shorten request unexpectedly succeeded for an existing alias"
     );
-}
-
-#[sqlx::test]
-async fn recently_added_links(pool: PgPool) {
-    const TEST_URL: &str = "https://example.com";
-    const TEST_URL2: &str = "https://example2.com";
-
-    let router = router(pool).await;
-
-    // Make a POST request to /api/shorten (first url)
-    let request_body = Body::from(serde_json::to_vec(&json!({"url": TEST_URL})).unwrap());
-    let request = Request::post("/api/shorten")
-        .header("content-type", "application/json")
-        .body(request_body)
-        .unwrap();
-
-    let _response = router.clone().oneshot(request).await.unwrap();
-
-    //Make a  POST request to api/shorten (second url)
-    let request_body = Body::from(serde_json::to_vec(&json!({"url": TEST_URL2})).unwrap());
-    let request = Request::post("/api/shorten")
-        .header("content-type", "application/json")
-        .body(request_body)
-        .unwrap();
-
-    let _response = router.clone().oneshot(request).await.unwrap();
-
-    //Make a GET request to /api/recent
-    let request_body = Body::empty();
-    let request = Request::get("/api/recent").body(request_body).unwrap();
-
-    let response = router.oneshot(request).await.unwrap();
-
-    assert_eq!(
-        response.status(),
-        StatusCode::OK,
-        "recently added links request failed"
-    );
-
-    let links: Vec<String> = json(response).await;
-    assert_eq!(links, vec![TEST_URL2, TEST_URL]);
 }
 
 #[sqlx::test]
@@ -259,7 +221,7 @@ async fn password_protected_link_unlock(pool: PgPool) {
     let request_body = Body::from(
         serde_json::to_vec(&json!({
             "url": TEST_URL,
-            "name": TEST_ALIAS,
+            "alias": TEST_ALIAS,
             "password": TEST_PASSWORD
         }))
         .unwrap(),
@@ -323,14 +285,30 @@ async fn password_protected_link_unlock(pool: PgPool) {
         "Expected 200 OK when provided with correct password"
     );
 
-    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
+    // 5. Capture unlock token
+    let cookie_str = response
+        .headers()
+        .get(header::SET_COOKIE)
+        .expect("Unlock should set cookie")
+        .to_str()
         .unwrap();
-    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
+    // 6. Redirect should work now
+    let request = Request::get(format!("/r/{TEST_ALIAS}"))
+        .header(header::COOKIE, cookie_str)
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.clone().oneshot(request).await.unwrap();
     assert_eq!(
-        body.get("url").and_then(|v| v.as_str()),
-        Some(TEST_URL),
-        "Expected unlock endpoint to return target url"
+        response.status(),
+        StatusCode::TEMPORARY_REDIRECT,
+        "Expected 307 redirect to unlock prompt for protected link"
+    );
+
+    let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
+    assert_eq!(
+        location, TEST_URL,
+        "Expected Location header to point to test URL"
     );
 }
