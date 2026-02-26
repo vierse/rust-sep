@@ -41,7 +41,7 @@ pub async fn collection_list(
     let link = super::fetch_link(&alias, &app).await?;
 
     // check if user has a matching token
-    let unlocked = unlock_token.map_or(false, |t| link.id == t.link_id());
+    let unlocked = unlock_token.is_some_and(|t| t.link_id() == link.id);
     if link.password_hash.is_some() && !unlocked {
         return Ok(LockedResponse {
             unlock: format!("/unlock/{}", alias.as_str()),
@@ -58,9 +58,8 @@ pub async fn collection_list(
 
     // check if user can edit the collection
     let now_s = OffsetDateTime::now_utc().unix_timestamp();
-    let edit = owner_token.map_or(false, |t| {
-        t.is_owner(link.id, now_s, link.created_at.unix_timestamp())
-    });
+    let edit =
+        owner_token.is_some_and(|t| t.is_owner(link.id, now_s, link.created_at.unix_timestamp()));
     Ok(Json(CollectionResponse {
         alias: alias.as_str().to_owned(),
         items,

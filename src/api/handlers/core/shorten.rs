@@ -47,6 +47,8 @@ impl OwnerToken {
             .any(|(id, exp, issued)| *id == link_id && *exp > now_s && *issued >= created_at)
     }
 
+    // TODO: to be used soon
+    #[allow(dead_code)]
     pub fn remaining_secs(&self, link_id: i64, now_s: i64) -> Option<i64> {
         self.0
             .iter()
@@ -121,7 +123,7 @@ pub async fn shorten(
 
     let password_ref = password.as_deref();
 
-    let (link_id, alias) = match alias {
+    let (link_id, alias_out) = match alias {
         // If request contains an alias, validate and save it
         Some(user_alias) => {
             let alias: LinkAlias = user_alias.try_into()?;
@@ -150,7 +152,7 @@ pub async fn shorten(
         }
     };
 
-    let response = ShortenResponse { alias }.into_response();
+    let response = ShortenResponse { alias: alias_out }.into_response();
 
     let now = OffsetDateTime::now_utc();
     let now_s = now.unix_timestamp();
