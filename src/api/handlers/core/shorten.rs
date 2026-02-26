@@ -11,7 +11,7 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{
     api::{error::ApiError, extract::MaybeUser, token::Token},
-    app::{AppState, usage_metrics::Category},
+    app::AppState,
     domain::{LinkAlias, LinkPassword, Url},
     services,
 };
@@ -110,8 +110,6 @@ pub async fn shorten(
         password,
     }): Json<ShortenRequest>,
 ) -> Result<(CookieJar, Response), ApiError> {
-    app.usage_metrics.log(Category::Shorten);
-
     let url: Url = url.try_into()?;
 
     let mut user_id = None;

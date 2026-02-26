@@ -55,31 +55,6 @@ services:
       retries: 20
     restart: unless-stopped
 
-  app-locust:
-    build:
-      context: .
-      dockerfile: docker/app.Dockerfile
-    depends_on:
-      postgres-locust:
-        condition: service_healthy
-    environment:
-      APP_PORT: ${APP_PORT}
-      DATABASE_URL: postgres://${DB_USER}:${DB_PASS}@postgres-locust:${DB_PORT}/${DB_NAME}
-    ports:
-      - "${APP_PORT}:${APP_PORT}"
-    restart: unless-stopped
-    cpuset: "0-3"
-    ulimits:
-      nproc: 65535
-      nofile:
-        soft: 20000
-        hard: 40000
-
-  postgres-locust:
-    extends:
-      service: postgres
-    cpuset: "4-7"
-
   locust:
     image: locustio/locust
     volumes:
@@ -90,8 +65,39 @@ services:
       - "8089:8089"
     command: >
       -f locustfile.py --host http://app-locust:${APP_PORT} --processes 4
-    cpuset: "8-11"
+
+  prometheus:
+    image: prom/prometheus:v3.10.0
+    container_name: prometheus
+    depends_on:
+      - app
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.3
+    container_name: grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    restart: unless-stopped
 
 volumes:
   deno_cache:
   postgres_data:
+  prometheus_data:
+  grafana_data:

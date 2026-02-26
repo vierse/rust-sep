@@ -31,6 +31,8 @@ arc-swap = "1.8.0"
 moka = { version = "0.12.12", features = ["future"] }
 rand_core = { version = "0.6", features = ["std"] }
 argon2 = "0.5"
+metrics = "0.24.3"
+metrics-exporter-prometheus = "0.18.1"
 
 [dev-dependencies]
 tower = { version = "0.5.1", features = ["full"] }

@@ -14,7 +14,6 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use time::{Date, OffsetDateTime};
 use tokio::{net::TcpListener, time::timeout};
 use tokio_util::sync::CancellationToken;
-pub mod usage_metrics;
 
 use crate::{
     api::{self, Sessions, token::TokenSigner},
@@ -47,7 +46,6 @@ pub struct CachedLink {
 pub struct AppState {
     pub pool: PgPool,
     pub sqids: Arc<Sqids>,
-    pub usage_metrics: Arc<usage_metrics::Metrics>,
     pub metrics: Arc<LinkMetrics>,
     pub cache: Cache<LinkAlias, Option<CachedLink>>,
     pub sessions: Sessions,
@@ -129,7 +127,6 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
         cache,
         sessions: Sessions::default(),
         hasher: Arc::new(Argon2::default()),
-        usage_metrics: Default::default(),
         diag: Arc::new(Diag::default()),
         // TODO: move key into env?
         signer: Arc::new(TokenSigner::new(
