@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     api::{session::SessionError, token::TokenError},
     domain::{
-        LinkAlias, LinkAliasError, LinkPasswordError, UrlParseError, UserName, UserPassword,
-        UserPasswordError, UsernameError,
+        LinkAlias, LinkAliasError, LinkPassword, LinkPasswordError, UrlParseError, UserName,
+        UserPassword, UserPasswordError, UsernameError,
     },
     services::{LinkError, ServiceError},
 };
@@ -99,9 +99,8 @@ impl From<LinkError> for ApiError {
 }
 
 impl From<SessionError> for ApiError {
-    fn from(_error: SessionError) -> Self {
-        // TODO: expired session errors might be relevant to user
-        Self::internal()
+    fn from(_: SessionError) -> Self {
+        Self::unauthorized()
     }
 }
 
@@ -153,8 +152,27 @@ impl From<LinkAliasError> for ApiError {
 }
 
 impl From<LinkPasswordError> for ApiError {
-    fn from(value: LinkPasswordError) -> Self {
-        Self::internal()
+    fn from(error: LinkPasswordError) -> Self {
+        match error {
+            LinkPasswordError::InvalidChars => ApiError::public(
+                StatusCode::BAD_REQUEST,
+                "Link password contains invalid characters",
+            ),
+            LinkPasswordError::TooShort => ApiError::public(
+                StatusCode::BAD_REQUEST,
+                formatcp!(
+                    "Link password must be at least {} characters",
+                    LinkPassword::MIN_LINK_PASSWORD_LENGTH
+                ),
+            ),
+            LinkPasswordError::TooLong => ApiError::public(
+                StatusCode::BAD_REQUEST,
+                formatcp!(
+                    "Link password cannot be longer than {} characters",
+                    LinkPassword::MAX_LINK_PASSWORD_LENGTH
+                ),
+            ),
+        }
     }
 }
 
