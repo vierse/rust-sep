@@ -34,7 +34,6 @@ export function MainView() {
   const get_data = async (cats) => {
     if (cats === null) return;
     if (cats.length === 0) return;
-    console.log(cats);
     const res = await getReq("/metrics/data",
                           null,
                           new URLSearchParams({weekdays: cats.join(',')}));
