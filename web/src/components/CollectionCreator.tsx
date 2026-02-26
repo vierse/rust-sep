@@ -50,6 +50,7 @@ export function CollectionCreator() {
 
   const submit = async () => {
     const trimmedAlias = linkAlias?.trim();
+    const trimmedPassword = linkPassword?.trim();
     const trimmedUrls = urls.map((u) => u.trim()).filter((u) => u.length > 0);
 
     const ac = new AbortController();
@@ -61,6 +62,7 @@ export function CollectionCreator() {
 
       const body: CreateCollectionRequest = { urls: trimmedUrls };
       if (trimmedAlias) body.alias = trimmedAlias;
+      if (trimmedPassword) body.password = trimmedPassword;
 
       const res = await postReq<CreateCollectionRequest, CreateCollectionResponse>(
         "/api/collection/create", body, ac.signal

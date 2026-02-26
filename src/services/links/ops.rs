@@ -58,7 +58,7 @@ pub async fn create_collection(
     pool: &PgPool,
 ) -> Result<(i64, String), ServiceError> {
     if urls.is_empty() {
-        return Err(CollectionError::LimitReached.into()); // TODO: empty
+        return Err(CollectionError::Empty.into());
     }
 
     if urls.len() as i32 > MAX_COLLECTION_ITEMS {
@@ -70,7 +70,6 @@ pub async fn create_collection(
     let password = password.map(|v| v.as_str());
     let (link_id, alias) = match alias {
         Some(link_alias) => {
-            // TODO: password...
             create_link_with_alias_tx(link_alias, None, &mut tx, None, password, hasher).await?
         }
         None => create_link_tx(generator, None, &mut tx, None, password, hasher).await?,
