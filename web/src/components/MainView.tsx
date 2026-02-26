@@ -111,6 +111,7 @@ export function MainView() {
 
   const canSubmit = userUrl.trim().length > 0;
   const readOnly = waiting || state === "ok";
+  const stateChanged = (userUrl || linkAlias || linkPassword || resultUrl);
   return (
     <Box style={{ position: "relative" }}>
       <Flex align="center" gap="2">
@@ -189,7 +190,7 @@ export function MainView() {
 
         {/* reset button */}
         <Tooltip content="Reset">
-          <IconButton color="red" radius="full" disabled={!(userUrl || linkAlias || linkPassword || resultUrl) || waiting} onClick={clearState}>
+          <IconButton color="red" radius="full" disabled={!stateChanged || waiting} onClick={clearState}>
             <ResetIcon />
           </IconButton>
         </Tooltip>
@@ -211,16 +212,16 @@ export function MainView() {
           <Card size="2">
             <Flex direction="column" gap="2">
               <TextField.Root
-                placeholder="Use a custom alias"
+                placeholder="Use a custom alias (optional)"
                 readOnly={waiting}
-                value={linkAlias}
+                value={linkAlias ?? ""}
                 onChange={(e) => setLinkAlias(e.target.value)}
               />
               <TextField.Root
-                placeholder="Set password"
+                placeholder="Set password (optional)"
                 type="password"
                 readOnly={waiting}
-                value={linkPassword}
+                value={linkPassword ?? ""}
                 onChange={(e) => setLinkPassword(e.target.value)}
               />
             </Flex>

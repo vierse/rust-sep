@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use thiserror::Error;
 use url::Url as UrlParser;
 
@@ -58,6 +60,14 @@ impl Url {
         }
 
         Ok(())
+    }
+}
+
+impl Deref for Url {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
     }
 }
 

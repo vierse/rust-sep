@@ -3,11 +3,9 @@ use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use rand_core::OsRng;
 use thiserror::Error;
 
-mod collections;
 mod links;
 mod users;
 
-pub use collections::*;
 pub use links::*;
 pub use users::*;
 

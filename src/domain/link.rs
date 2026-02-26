@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct LinkAlias(String);
 
@@ -32,6 +34,14 @@ impl LinkAlias {
         }
 
         Ok(())
+    }
+}
+
+impl Deref for LinkAlias {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
     }
 }
 
@@ -87,6 +97,14 @@ impl LinkPassword {
         }
 
         Ok(())
+    }
+}
+
+impl Deref for LinkPassword {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
     }
 }
 

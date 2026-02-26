@@ -30,7 +30,11 @@ pub fn build_router(state: AppState) -> Router {
 
     // collection API
     let collection_api = Router::new()
-        .route("/create/{alias}", post(handlers::collection_create))
+        .route("/create", post(handlers::collection_create))
+        .route(
+            "/create/{alias}",
+            post(handlers::collection_create_from_link),
+        )
         .route("/{alias}/list", get(handlers::collection_list))
         .route("/{alias}/add", post(handlers::collection_add_url));
 

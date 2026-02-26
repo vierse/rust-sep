@@ -12,7 +12,7 @@ use time::{Duration, OffsetDateTime};
 use crate::{
     api::{error::ApiError, extract::MaybeUser, token::Token},
     app::{AppState, usage_metrics::Category},
-    domain::{LinkAlias, Url},
+    domain::{LinkAlias, LinkPassword, Url},
     services,
 };
 
@@ -169,6 +169,79 @@ pub async fn shorten(
         .max_age(Duration::seconds(OwnerToken::TTL_SECS))
         .expires(now + Duration::seconds(OwnerToken::TTL_SECS))
         .build();
+    let jar = jar.add(cookie);
+
+    Ok((jar, response))
+}
+
+#[derive(Deserialize)]
+pub struct CreateCollectionRequest {
+    alias: Option<String>,
+    password: Option<String>,
+    urls: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct CreateCollectionResponse {
+    alias: String,
+}
+
+pub async fn collection_create(
+    jar: CookieJar,
+    State(app): State<AppState>,
+    Json(CreateCollectionRequest {
+        alias,
+        password,
+        urls,
+    }): Json<CreateCollectionRequest>,
+) -> Result<(CookieJar, Response), ApiError> {
+    let alias = alias.map(LinkAlias::try_from).transpose()?;
+    let password = password.map(LinkPassword::try_from).transpose()?;
+    let urls: Vec<Url> = urls
+        .into_iter()
+        .map(Url::try_from)
+        .collect::<Result<_, _>>()?;
+
+    let (link_id, alias_out) = services::create_collection(
+        urls,
+        alias.as_ref(),
+        password.as_ref(),
+        &app.sqids,
+        &app.hasher,
+        &app.pool,
+    )
+    .await?;
+
+    let response = (
+        StatusCode::CREATED,
+        Json(CreateCollectionResponse { alias: alias_out }),
+    )
+        .into_response();
+
+    let now = OffsetDateTime::now_utc();
+    let now_s = now.unix_timestamp();
+
+    let mut token = match jar.get(OwnerToken::TYPE) {
+        Some(cookie) => app
+            .signer
+            .verify_token(cookie.value(), now_s)
+            .unwrap_or_else(|_| OwnerToken::empty()),
+        None => OwnerToken::empty(),
+    };
+
+    token.update(link_id, now_s);
+
+    let signed_token = app.signer.sign_token(&token)?;
+
+    let cookie = Cookie::build((OwnerToken::TYPE, signed_token))
+        .http_only(true)
+        .secure(false)
+        .path("/")
+        .same_site(cookie::SameSite::Lax)
+        .max_age(Duration::seconds(OwnerToken::TTL_SECS))
+        .expires(now + Duration::seconds(OwnerToken::TTL_SECS))
+        .build();
+
     let jar = jar.add(cookie);
 
     Ok((jar, response))

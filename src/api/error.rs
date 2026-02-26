@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     api::{session::SessionError, token::TokenError},
     domain::{
-        LinkAlias, LinkAliasError, UrlParseError, UserName, UserPassword, UserPasswordError,
-        UsernameError,
+        LinkAlias, LinkAliasError, LinkPasswordError, UrlParseError, UserName, UserPassword,
+        UserPasswordError, UsernameError,
     },
     services::{LinkError, ServiceError},
 };
@@ -149,6 +149,12 @@ impl From<LinkAliasError> for ApiError {
                 "Chosen link contains invalid characters",
             ),
         }
+    }
+}
+
+impl From<LinkPasswordError> for ApiError {
+    fn from(value: LinkPasswordError) -> Self {
+        Self::internal()
     }
 }
 
