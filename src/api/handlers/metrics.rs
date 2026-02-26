@@ -25,9 +25,9 @@ enum MetricsCat {
 const CAT_NUM: u32 = Category::AuthenticateUser as u32 + 1;
 
 impl MetricsCat {
-    fn to_bit_idx(&self) -> u32 {
+    fn to_bit_idx(self) -> u32 {
         match self {
-            MetricsCat::Cat(c) => *c as u32,
+            MetricsCat::Cat(c) => c as u32,
             MetricsCat::Total => CAT_NUM,
         }
     }
@@ -123,9 +123,9 @@ pub async fn metrics(
     let cats = params
         .weekdays
         .split(',')
-        .map(|cat| MetricsCat::from_str(cat))
-        .fold(Ok(MetricsCatSet(0)), |set: Result<_, ApiError>, cat| {
-            Ok(set?.set(cat?))
+        .map(MetricsCat::from_str)
+        .try_fold(MetricsCatSet(0), |mut set, cat| -> Result<_, ApiError> {
+            Ok(set.set(cat?))
         })?;
 
     let mut resp: HashMap<&'static str, _> = HashMap::new();

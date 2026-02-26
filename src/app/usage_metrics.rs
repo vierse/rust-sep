@@ -67,14 +67,20 @@ impl CategorySet {
     }
 
     pub fn is_set(&self, cat: Category) -> bool {
-        self.0 & (1 << cat as u32) != 0
+        self.0 & 1u32.wrapping_shl(cat as u32) != 0
     }
 
     pub fn is_set_raw(&self, cat: u32) -> bool {
-        self.0 & (1 << cat as u32) != 0
+        self.0 & 1u32.wrapping_shl(cat) != 0
     }
     pub fn from_raw(cats: u32) -> Self {
         Self(cats)
+    }
+}
+
+impl Default for CategorySet {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
