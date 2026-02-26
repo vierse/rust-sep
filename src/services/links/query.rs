@@ -1,0 +1,129 @@
+use serde::Serialize;
+use sqlx::PgPool;
+
+use crate::{
+    app::{CachedLink, CachedLinkType},
+    domain::{LinkAlias, UserId},
+    services::{LinkError, ServiceError},
+};
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LinkItem {
+    pub alias: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CollectionItem {
+    position: i32,
+    url: String,
+    title: Option<String>,
+}
+
+/// Query url from database
+///
+/// Returns Ok(None) if the alias does not exist
+#[tracing::instrument(name = "services::query_url_by_alias", skip(pool))]
+pub async fn query_url_by_alias(
+    alias: &LinkAlias,
+    pool: &PgPool,
+) -> Result<Option<CachedLink>, ServiceError> {
+    let rec_opt = sqlx::query!(
+        r#"SELECT id, kind, target_url, last_seen, password_hash FROM links WHERE alias = $1"#,
+        alias.as_str()
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let rec = rec_opt.ok_or(LinkError::NotFound)?;
+    let kind = if rec.kind == "redirect" {
+        CachedLinkType::Redirect
+    } else {
+        CachedLinkType::Collection
+    };
+
+    Ok(Some(CachedLink {
+        id: rec.id,
+        kind,
+        url: rec.target_url.unwrap_or_default(),
+        last_seen: rec.last_seen,
+        password_hash: rec.password_hash,
+    }))
+}
+
+/// List user's links
+#[tracing::instrument(name = "services::query_links_by_user_id", skip(pool))]
+pub async fn query_links_by_user_id(
+    user_id: &UserId,
+    pool: &PgPool,
+) -> Result<Vec<LinkItem>, ServiceError> {
+    let rec_vec = sqlx::query!(
+        r#"
+        SELECT alias, target_url
+        FROM links
+        WHERE user_id = $1
+        ORDER BY created_at DESC
+        "#,
+        user_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let links = rec_vec
+        .into_iter()
+        .map(|rec| LinkItem {
+            alias: rec.alias,
+            url: rec.target_url.unwrap(),
+        })
+        .collect();
+
+    Ok(links)
+}
+
+pub async fn query_collection_by_id(
+    link_id: i64,
+    pool: &PgPool,
+) -> Result<Vec<CollectionItem>, ServiceError> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT id, position, target_url, title
+        FROM collection_items
+        WHERE link_id = $1
+        ORDER BY position ASC
+        "#,
+        link_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| CollectionItem {
+            position: r.position,
+            url: r.target_url,
+            title: r.title,
+        })
+        .collect())
+}
+
+pub async fn query_collection_url_by_pos(
+    link_id: i64,
+    pos: i32,
+    pool: &PgPool,
+) -> Result<String, ServiceError> {
+    let rec_opt = sqlx::query!(
+        r#"
+        SELECT target_url
+        FROM collection_items
+        WHERE link_id = $1
+          AND position = $2
+        "#,
+        link_id,
+        pos
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let rec = rec_opt.ok_or(LinkError::NotFound)?;
+    Ok(rec.target_url)
+}

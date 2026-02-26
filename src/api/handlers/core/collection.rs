@@ -67,7 +67,7 @@ pub async fn collection_list(
     .into_response())
 }
 
-pub async fn collection_create(
+pub async fn collection_create_from_link(
     MaybeToken(token): MaybeToken<OwnerToken>,
     Path(alias): Path<String>,
     State(app): State<AppState>,
