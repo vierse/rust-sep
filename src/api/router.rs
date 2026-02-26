@@ -3,7 +3,6 @@ use axum::{
     middleware::{from_fn, from_fn_with_state},
     routing::{delete, get, post},
 };
-use metrics_exporter_prometheus::PrometheusBuilder;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
@@ -14,19 +13,6 @@ use crate::{
 const DIST_DIR: &str = "web/dist";
 
 pub fn build_router(state: AppState) -> Router {
-    let builder = PrometheusBuilder::new();
-    let handle = builder
-        .install_recorder()
-        .expect("failed to install recorder");
-
-    let metrics = Router::new().route(
-        "/metrics",
-        get(move || {
-            let handle = handle.clone();
-            async move { handle.render() }
-        }),
-    );
-
     // user API (auth required)
     let user_api = Router::new()
         .route("/list", get(handlers::list_user_links))
@@ -58,7 +44,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/unlock/{alias}", post(handlers::unlock))
         .route("/info/{alias}", get(handlers::link_info));
 
-    // assemble everything
+    // assemble API
     let api = Router::new()
         .nest("/api", core_api)
         .route("/r/{alias}", get(handlers::redirect))
@@ -69,8 +55,6 @@ pub fn build_router(state: AppState) -> Router {
 
     // merge with assets
     let serve = ServeDir::new(DIST_DIR).fallback(ServeFile::new(format!("{DIST_DIR}/index.html")));
-    Router::new()
-        .merge(metrics)
-        .merge(api)
-        .fallback_service(serve)
+
+    Router::new().merge(api).fallback_service(serve)
 }
