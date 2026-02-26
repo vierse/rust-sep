@@ -58,7 +58,9 @@ pub async fn collection_list(
 
     // check if user can edit the collection
     let now_s = OffsetDateTime::now_utc().unix_timestamp();
-    let edit = owner_token.map_or(false, |t| t.is_owner(link.id, now_s));
+    let edit = owner_token.map_or(false, |t| {
+        t.is_owner(link.id, now_s, link.created_at.unix_timestamp())
+    });
     Ok(Json(CollectionResponse {
         alias: alias.as_str().to_owned(),
         items,
@@ -80,7 +82,7 @@ pub async fn collection_create_from_link(
     let link = super::fetch_link(&alias, &app).await?;
 
     let now_s = OffsetDateTime::now_utc().unix_timestamp();
-    if !token.is_owner(link.id, now_s) {
+    if !token.is_owner(link.id, now_s, link.created_at.unix_timestamp()) {
         return Err(ApiError::unauthorized());
     }
 
@@ -122,7 +124,7 @@ pub async fn collection_add_url(
     let link = super::fetch_link(&alias, &app).await?;
 
     let now_s = OffsetDateTime::now_utc().unix_timestamp();
-    if !token.is_owner(link.id, now_s) {
+    if !token.is_owner(link.id, now_s, link.created_at.unix_timestamp()) {
         return Err(ApiError::unauthorized());
     }
 

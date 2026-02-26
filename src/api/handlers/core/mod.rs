@@ -18,7 +18,7 @@ use time::{Duration, OffsetDateTime};
 
 pub const EXPIRY_DAYS: i64 = 30;
 
-async fn fetch_link(alias: &LinkAlias, app: &AppState) -> Result<CachedLink, ApiError> {
+pub async fn fetch_link(alias: &LinkAlias, app: &AppState) -> Result<CachedLink, ApiError> {
     let link_opt = if let Some(link) = app.cache.get(alias).await {
         app.diag.cache_hit();
         link

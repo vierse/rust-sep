@@ -23,7 +23,7 @@ pub struct LinkMetricsData {
 impl LinkMetricsData {
     pub fn new(last_access_s: i64) -> Self {
         Self {
-            hits: AtomicI64::new(1),
+            hits: AtomicI64::new(0),
             last_access_s: AtomicI64::new(last_access_s),
         }
     }
