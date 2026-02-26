@@ -16,7 +16,7 @@ pub struct Hour {
     pub categories: [AtomicUsize; Category::AuthenticateUser as usize + 1],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u32)]
 pub enum Category {
     Redirect,
@@ -24,6 +24,58 @@ pub enum Category {
     RecentlyAdded,
     AuthenticateSession,
     AuthenticateUser,
+}
+
+impl TryFrom<u32> for Category {
+    type Error = &'static str;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Category::Redirect),
+            1 => Ok(Category::Shorten),
+            2 => Ok(Category::RecentlyAdded),
+            3 => Ok(Category::AuthenticateSession),
+            4 => Ok(Category::AuthenticateUser),
+            _ => Err("value to large to be a category"),
+        }
+    }
+}
+
+impl Category {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Category::Redirect => "redirect",
+            Category::Shorten => "shorten",
+            Category::RecentlyAdded => "recently added",
+            Category::AuthenticateSession => "authenticate session",
+            Category::AuthenticateUser => "authenticate user",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct CategorySet(u32);
+
+impl CategorySet {
+    pub fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn set(&mut self, cat: Category) {
+        self.0 |= 1 << cat as u32;
+    }
+
+    pub fn is_set(&self, cat: Category) -> bool {
+        self.0 & (1 << cat as u32) != 0
+    }
+
+    pub fn is_set_raw(&self, cat: u32) -> bool {
+        self.0 & (1 << cat as u32) != 0
+    }
+    pub fn from_raw(cats: u32) -> Self {
+        Self(cats)
+    }
 }
 
 impl Metrics {
@@ -56,6 +108,19 @@ impl Metrics {
             .map(|day| day.total_usage_in(cat))
             .sum()
     }
+
+    pub fn total_usage_daily(&self) -> impl Iterator<Item = usize> {
+        self.week_days.iter().map(|d| d.total_usage())
+    }
+
+    pub fn total_usage_by_day_in_bitset(
+        &self,
+        cat: CategorySet,
+    ) -> impl Iterator<Item = impl Iterator<Item = usize>> {
+        self.week_days
+            .iter()
+            .map(move |day| day.total_usage_in_bitset(cat))
+    }
 }
 
 impl MetricsDay {
@@ -68,6 +133,18 @@ impl MetricsDay {
             .iter()
             .map(|h| h.categories[cat as usize].load(Ordering::Relaxed))
             .sum()
+    }
+
+    pub fn total_usage_in_bitset(&self, cats: CategorySet) -> impl Iterator<Item = usize> {
+        (0..=Category::AuthenticateUser as u32)
+            .filter(move |idx| cats.is_set_raw(*idx))
+            .map(|idx| {
+                self.hours
+                    .iter()
+                    // TODO: turn the access into column major
+                    .map(|h| h.categories[idx as usize].load(Ordering::Relaxed))
+                    .sum()
+            })
     }
 
     pub fn total_usage(&self) -> usize {

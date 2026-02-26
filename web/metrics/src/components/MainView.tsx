@@ -24,13 +24,17 @@ ChartJS.register(
 );
 
 
+const colors = ["red", "green", "blue", "cyan", "magenta", "pink", "crimson"]
+
 export function MainView() {
 
-  const [useData, setData] = React.useState(Array(7).fill(0));
+  const [useData, setData] = React.useState({});
   const [catState, setCatState] = React.useState([null]);
 
   const get_data = async (cats) => {
-    console.debug("cats=" + cats);
+    if (cats === null) return;
+    if (cats.length === 0) return;
+    console.log(cats);
     const res = await getReq("/metrics/data",
                           null,
                           new URLSearchParams({weekdays: cats.join(',')}));
@@ -42,21 +46,23 @@ export function MainView() {
 
     clonedCatState[index] = value;
     setCatState(clonedCatState);
-    get_data(clonedCatState[0].map((opt) => opt.value));
+    if (clonedCatState) { get_data(clonedCatState[index].map((opt) => opt.value)) };
   };
 
  
   const weekdays = ["Monday", "Tuesday", "Wendsday", "Thursday", "Friday", "Saturday", "Sunday"];
-  const data = {
+  let chart_data = {
     labels: weekdays,
-    datasets: [
-      {
-        label: 'totals',
-        data: useData,
-        backgroundColor: "red",
-      },
-    ],
+    datasets: [],
   };
+
+  let col_idx = 0;
+  for (const [label, data] of Object.entries(useData)) {
+    col_idx += 1;
+    chart_data.datasets.push({
+      label, data, backgroundColor: colors[col_idx]
+    })
+  }
 
   return (
     <>
@@ -71,7 +77,7 @@ export function MainView() {
             />
         );
       })}
-      <Bar data={data} />
+      <Bar data={chart_data} />
     </>
   )
 }
