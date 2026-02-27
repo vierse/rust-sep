@@ -5,12 +5,11 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use time::OffsetDateTime;
 
 use crate::{
     api::{
         error::ApiError,
-        extract::MaybeToken,
+        extract::{MaybeToken, MaybeUser},
         handlers::{OwnerToken, UnlockToken},
     },
     app::{AppState, CachedLinkType},
@@ -22,7 +21,7 @@ use crate::{
 pub struct CollectionResponse {
     pub alias: String,
     pub items: Vec<CollectionItem>,
-    pub edit: bool,
+    pub owned: bool,
 }
 
 #[derive(Serialize)]
@@ -31,6 +30,7 @@ pub struct LockedResponse {
 }
 
 pub async fn collection_list(
+    MaybeUser(session_id): MaybeUser,
     MaybeToken(unlock_token): MaybeToken<UnlockToken>,
     MaybeToken(owner_token): MaybeToken<OwnerToken>,
     State(app): State<AppState>,
@@ -57,31 +57,28 @@ pub async fn collection_list(
     app.metrics.record_hit(link.id);
 
     // check if user can edit the collection
-    let now_s = OffsetDateTime::now_utc().unix_timestamp();
-    let edit =
-        owner_token.is_some_and(|t| t.is_owner(link.id, now_s, link.created_at.unix_timestamp()));
+    let owned = super::is_user_owned(session_id.as_ref(), &link, &app)
+        || super::is_token_owned(owner_token, &link);
     Ok(Json(CollectionResponse {
         alias: alias.as_str().to_owned(),
         items,
-        edit,
+        owned,
     })
     .into_response())
 }
 
 pub async fn collection_create_from_link(
+    MaybeUser(session_id): MaybeUser,
     MaybeToken(token): MaybeToken<OwnerToken>,
     Path(alias): Path<String>,
     State(app): State<AppState>,
 ) -> Result<Response, ApiError> {
-    let Some(token) = token else {
-        return Err(ApiError::unauthorized());
-    };
-
     let alias: LinkAlias = alias.try_into()?;
     let link = super::fetch_link(&alias, &app).await?;
 
-    let now_s = OffsetDateTime::now_utc().unix_timestamp();
-    if !token.is_owner(link.id, now_s, link.created_at.unix_timestamp()) {
+    let owned = super::is_user_owned(session_id.as_ref(), &link, &app)
+        || super::is_token_owned(token, &link);
+    if !owned {
         return Err(ApiError::unauthorized());
     }
 
@@ -109,21 +106,18 @@ impl IntoResponse for LockedResponse {
 }
 
 pub async fn collection_add_url(
+    MaybeUser(session_id): MaybeUser,
     MaybeToken(token): MaybeToken<OwnerToken>,
     Path(alias): Path<String>,
     State(app): State<AppState>,
     Json(AddUrlRequest { url, title }): Json<AddUrlRequest>,
 ) -> Result<Response, ApiError> {
-    let Some(token) = token else {
-        return Err(ApiError::unauthorized());
-    };
-
     let alias: LinkAlias = alias.try_into()?;
-
     let link = super::fetch_link(&alias, &app).await?;
 
-    let now_s = OffsetDateTime::now_utc().unix_timestamp();
-    if !token.is_owner(link.id, now_s, link.created_at.unix_timestamp()) {
+    let owned = super::is_user_owned(session_id.as_ref(), &link, &app)
+        || super::is_token_owned(token, &link);
+    if !owned {
         return Err(ApiError::unauthorized());
     }
 

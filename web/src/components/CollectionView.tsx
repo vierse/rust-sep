@@ -9,7 +9,7 @@ import { useNotify } from "./NotifyProvider";
 type CollectionResponse = {
   alias: string;
   items: CollectionItem[];
-  edit: boolean;
+  owned: boolean;
 };
 
 type CollectionItem = {
@@ -50,7 +50,7 @@ export function CollectionView({ alias }: { alias: string }) {
         `/api/collection/${encodeURIComponent(alias)}/list`
       );
       setItems(data.items);
-      setCanEdit(data.edit);
+      setCanEdit(data.owned);
     } catch (err) {
       if (err instanceof LockedError) {
         window.location.assign(err.unlockUrl);
@@ -94,7 +94,7 @@ export function CollectionView({ alias }: { alias: string }) {
       );
 
       setItems(data.items);
-      setCanEdit(data.edit);
+      setCanEdit(data.owned);
 
       setNewUrl("");
       setNewTitle("");
