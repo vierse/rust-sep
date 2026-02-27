@@ -4,8 +4,9 @@ use axum::{
 };
 
 use crate::{
-    api::{error::ApiError, extract::MaybeToken, token::UnlockToken},
-    app::{AppState, CachedLinkType},
+    api::{
+        AppState, error::ApiError, extract::MaybeToken, state::CachedLinkType, token::UnlockToken,
+    },
     domain::LinkAlias,
     services,
 };

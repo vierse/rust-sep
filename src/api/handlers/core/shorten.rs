@@ -11,11 +11,11 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{
     api::{
+        AppState,
         error::ApiError,
         extract::{MaybeToken, MaybeUser},
         token::{OwnerToken, Token},
     },
-    app::AppState,
     domain::{LinkAlias, LinkPassword, Url},
     services,
 };

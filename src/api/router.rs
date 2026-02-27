@@ -5,10 +5,7 @@ use axum::{
 };
 use tower_http::services::{ServeDir, ServeFile};
 
-use crate::{
-    api::{handlers, metrics, session},
-    app::AppState,
-};
+use crate::api::{AppState, handlers, metrics, session};
 
 const DIST_DIR: &str = "web/dist";
 

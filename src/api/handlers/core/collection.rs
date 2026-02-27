@@ -8,11 +8,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     api::{
+        AppState,
         error::ApiError,
         extract::{MaybeToken, MaybeUser},
+        state::CachedLinkType,
         token::{OwnerToken, UnlockToken},
     },
-    app::{AppState, CachedLinkType},
     domain::{LinkAlias, Url},
     services::{self, CollectionItem},
 };

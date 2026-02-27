@@ -8,8 +8,7 @@ use cookie::{Cookie, SameSite};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    api::{error::ApiError, extract::RequireUser},
-    app::AppState,
+    api::{AppState, error::ApiError, extract::RequireUser},
     domain::{UserName, UserPassword},
     services,
 };

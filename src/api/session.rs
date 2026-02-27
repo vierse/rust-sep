@@ -14,7 +14,7 @@ use dashmap::DashMap;
 use rand_core::{OsRng, RngCore};
 
 use crate::{
-    app::AppState,
+    api::AppState,
     domain::{User, UserId},
 };
 
