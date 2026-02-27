@@ -11,7 +11,7 @@ pub(crate) use shorten::*;
 pub(crate) use unlock::*;
 
 use crate::{
-    api::{error::ApiError, session::SessionId},
+    api::{error::ApiError, session::SessionId, token::Token},
     app::{AppState, CachedLink},
     domain::LinkAlias,
     services,
@@ -52,9 +52,7 @@ fn is_user_owned(session_id: Option<&SessionId>, link: &CachedLink, app: &AppSta
         .is_some_and(|session| Some(session.user_id) == link.user_id)
 }
 
-fn is_token_owned(token: Option<OwnerToken>, link: &CachedLink) -> bool {
-    token.is_some_and(|t| {
-        let now_s = OffsetDateTime::now_utc().unix_timestamp();
-        t.is_owner(link.id, now_s, link.created_at.unix_timestamp())
-    })
+fn is_token_active<T: Token>(token: Option<&T>, link: &CachedLink) -> bool {
+    let now_s = OffsetDateTime::now_utc().unix_timestamp();
+    token.is_some_and(|t| t.contains(link.id, now_s))
 }

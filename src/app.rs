@@ -112,7 +112,7 @@ pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppSta
     // Initialize Sqids generator
     let sqids = Arc::new(
         Sqids::builder()
-            .min_length(LinkAlias::MIN_RANDOM_ALIAS_LENGTH as u8)
+            .min_length(LinkAlias::MIN_RANDOM_ALIAS_LENGTH)
             .alphabet(ALPHABET.chars().collect())
             .build()?,
     );

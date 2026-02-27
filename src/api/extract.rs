@@ -1,3 +1,5 @@
+use std::convert::Infallible;
+
 use axum::{
     extract::FromRequestParts,
     http::{StatusCode, request::Parts},
@@ -29,7 +31,7 @@ impl FromRequestParts<AppState> for RequireUser {
 pub struct MaybeUser(pub Option<SessionId>);
 
 impl FromRequestParts<AppState> for MaybeUser {
-    type Rejection = std::convert::Infallible;
+    type Rejection = Infallible;
 
     async fn from_request_parts(parts: &mut Parts, _: &AppState) -> Result<Self, Self::Rejection> {
         Ok(MaybeUser(
@@ -40,8 +42,11 @@ impl FromRequestParts<AppState> for MaybeUser {
 
 pub struct MaybeToken<T>(pub Option<T>);
 
-impl<T: Token> FromRequestParts<AppState> for MaybeToken<T> {
-    type Rejection = std::convert::Infallible;
+impl<T> FromRequestParts<AppState> for MaybeToken<T>
+where
+    T: Token,
+{
+    type Rejection = Infallible;
 
     async fn from_request_parts(
         parts: &mut Parts,
@@ -54,10 +59,8 @@ impl<T: Token> FromRequestParts<AppState> for MaybeToken<T> {
         };
 
         let now_s = OffsetDateTime::now_utc().unix_timestamp();
+        let token = state.signer.verify_token::<T>(cookie.value(), now_s).ok();
 
-        match state.signer.verify_token(cookie.value(), now_s) {
-            Ok(token) => Ok(Self(Some(token))),
-            Err(_) => Ok(Self(None)),
-        }
+        Ok(Self(token))
     }
 }

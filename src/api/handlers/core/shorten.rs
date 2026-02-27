@@ -10,7 +10,11 @@ use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 
 use crate::{
-    api::{error::ApiError, extract::MaybeUser, token::Token},
+    api::{
+        error::ApiError,
+        extract::MaybeUser,
+        token::{OwnerToken, Token},
+    },
     app::AppState,
     domain::{LinkAlias, LinkPassword, Url},
     services,
@@ -31,72 +35,6 @@ pub struct ShortenResponse {
 impl IntoResponse for ShortenResponse {
     fn into_response(self) -> Response {
         (StatusCode::CREATED, Json(self)).into_response()
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct OwnerToken(Vec<(i64, i64, i64)>);
-
-impl OwnerToken {
-    const MAX_OWNERS: usize = 50;
-    const TTL_SECS: i64 = 24 * 60 * 60; // 24 hours
-
-    pub fn is_owner(&self, link_id: i64, now_s: i64, created_at: i64) -> bool {
-        self.0
-            .iter()
-            .any(|(id, exp, issued)| *id == link_id && *exp > now_s && *issued >= created_at)
-    }
-
-    // TODO: to be used soon
-    #[allow(dead_code)]
-    pub fn remaining_secs(&self, link_id: i64, now_s: i64) -> Option<i64> {
-        self.0
-            .iter()
-            .find(|(id, _, _)| *id == link_id)
-            .and_then(|(_, exp, _)| (*exp > now_s).then_some(*exp - now_s))
-    }
-
-    fn empty() -> Self {
-        Self(Vec::new())
-    }
-
-    fn update(&mut self, link_id: i64, now_s: i64) {
-        // prune expired owners
-        self.0.retain(|(_, exp, _)| *exp > now_s);
-
-        let owner = (link_id, now_s + Self::TTL_SECS, now_s);
-
-        // refresh if owner exists
-        if let Some(existing) = self.0.iter_mut().find(|(id, _, _)| *id == link_id) {
-            *existing = owner;
-            return;
-        }
-
-        if self.0.len() >= Self::MAX_OWNERS {
-            // prune the oldest
-            if let Some((idx, _)) = self
-                .0
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, (_, exp, _))| *exp)
-            {
-                self.0.swap_remove(idx);
-            }
-        }
-
-        self.0.push(owner);
-    }
-
-    fn max_exp(&self) -> Option<i64> {
-        self.0.iter().map(|(_, exp, _)| *exp).max()
-    }
-}
-
-impl Token for OwnerToken {
-    const TYPE: &'static str = "owner";
-
-    fn exp(&self) -> i64 {
-        self.max_exp().unwrap_or(0)
     }
 }
 
@@ -171,8 +109,8 @@ pub async fn shorten(
         .secure(false)
         .path("/")
         .same_site(cookie::SameSite::Lax)
-        .max_age(Duration::seconds(OwnerToken::TTL_SECS))
-        .expires(now + Duration::seconds(OwnerToken::TTL_SECS))
+        .max_age(Duration::seconds(OwnerToken::ttl()))
+        .expires(now + Duration::seconds(OwnerToken::ttl()))
         .build();
     let jar = jar.add(cookie);
 
@@ -245,8 +183,8 @@ pub async fn collection_create(
         .secure(false)
         .path("/")
         .same_site(cookie::SameSite::Lax)
-        .max_age(Duration::seconds(OwnerToken::TTL_SECS))
-        .expires(now + Duration::seconds(OwnerToken::TTL_SECS))
+        .max_age(Duration::seconds(OwnerToken::ttl()))
+        .expires(now + Duration::seconds(OwnerToken::ttl()))
         .build();
 
     let jar = jar.add(cookie);

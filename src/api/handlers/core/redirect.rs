@@ -4,7 +4,7 @@ use axum::{
 };
 
 use crate::{
-    api::{error::ApiError, extract::MaybeToken, handlers::UnlockToken},
+    api::{error::ApiError, extract::MaybeToken, token::UnlockToken},
     app::{AppState, CachedLinkType},
     domain::LinkAlias,
     services,
@@ -32,12 +32,12 @@ async fn redirect_impl(
     app: &AppState,
     alias: LinkAlias,
     idx_opt: Option<usize>,
-    token_opt: Option<UnlockToken>,
+    token: Option<UnlockToken>,
 ) -> Result<Redirect, ApiError> {
     let link = super::fetch_link(&alias, app).await?;
 
     // redirect if link is locked and user has no matching token
-    let unlocked = token_opt.as_ref().is_some_and(|t| link.id == t.link_id());
+    let unlocked = super::is_token_active(token.as_ref(), &link);
     if link.password_hash.is_some() && !unlocked {
         return Ok(Redirect::temporary(&format!("/unlock/{}", alias.as_str())));
     }
