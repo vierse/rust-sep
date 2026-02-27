@@ -54,14 +54,18 @@ pub fn load() -> Result<Settings> {
         env_str.parse::<u16>().map_err(|e| e.into())
     })?;
 
-    let database_url_opt: Option<Url> = try_from_env(DATABASE_URL_ENV, |env_str| {
+    let mut database_url_opt: Option<Url> = try_from_env(DATABASE_URL_ENV, |env_str| {
         Url::parse(&env_str).map_err(|e| e.into())
     })?;
 
-    if let Some(port) = port_opt
-        && let Some(database_url) = database_url_opt
-    {
-        return Ok(Settings { port, database_url });
+    // if let Some(port) = port_opt
+    //     && let Some(database_url) = database_url_opt
+    if let Some(settings) = port_opt.and_then(|port| {
+        database_url_opt
+            .take()
+            .map(|database_url| Settings { port, database_url })
+    }) {
+        return Ok(settings);
     }
 
     let config = load_default_config()?;
