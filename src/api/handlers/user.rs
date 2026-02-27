@@ -6,8 +6,7 @@ use axum::{
 };
 
 use crate::{
-    api::{error::ApiError, extract::RequireUser, session::ClearSid},
-    app::AppState,
+    api::{AppState, error::ApiError, extract::RequireUser, session::ClearSid},
     domain::LinkAlias,
     services::{self, query_links_by_user_id},
 };

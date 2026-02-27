@@ -14,10 +14,7 @@ use tower::ServiceExt;
 
 use axum::Router;
 
-use url_shorten::{
-    api::{self, handlers::EXPIRY_DAYS},
-    app,
-};
+use url_shorten::api::{self, AppKeys, AppState, handlers::EXPIRY_DAYS};
 
 #[derive(Deserialize)]
 struct ShortenResponse {
@@ -33,8 +30,10 @@ async fn json<T: DeserializeOwned>(response: Response) -> T {
 }
 
 async fn router(pool: PgPool) -> Router {
-    let state = app::build_test_app_state(pool).unwrap();
-    api::build_router(state.into())
+    dotenv::dotenv().ok();
+    let app_keys = AppKeys::from_env().expect("Could not load app keys from env");
+    let state = AppState::new(pool, app_keys).expect("Could not build AppState");
+    api::build_router(state)
 }
 
 #[sqlx::test]

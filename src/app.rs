@@ -1,85 +1,17 @@
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::Duration,
-};
+use std::{env, time::Duration};
 
 use anyhow::{Context, Result};
-use argon2::Argon2;
 use metrics_exporter_prometheus::PrometheusBuilder;
-use moka::future::Cache;
-use sqids::Sqids;
 use sqlx::{PgPool, postgres::PgPoolOptions};
-use time::{Date, OffsetDateTime};
 use tokio::{net::TcpListener, time::timeout};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    api::{self, Sessions, token::TokenSigner},
-    config::Settings,
-    domain::LinkAlias,
+    api::{self, AppKeys, AppState},
     scheduler::Scheduler,
-    tasks::{
-        diag, link_cleanup,
-        link_metrics::{self, LinkMetrics},
-    },
+    tasks::{link_cleanup, link_metrics},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CachedLinkType {
-    Redirect,
-    Collection,
-}
-
-#[derive(Debug, Clone)]
-pub struct CachedLink {
-    pub id: i64,
-    pub kind: CachedLinkType,
-    pub url: String,
-    pub user_id: Option<i64>,
-    pub last_seen: Date,
-    pub password_hash: Option<String>,
-    pub created_at: OffsetDateTime,
-}
-
-#[derive(Clone)]
-pub struct AppState {
-    pub pool: PgPool,
-    pub sqids: Arc<Sqids>,
-    pub metrics: Arc<LinkMetrics>,
-    pub cache: Cache<LinkAlias, Option<CachedLink>>,
-    pub sessions: Sessions,
-    pub hasher: Arc<Argon2<'static>>,
-    pub diag: Arc<Diag>,
-    pub signer: Arc<TokenSigner>,
-}
-
-#[derive(Default)]
-pub struct Diag {
-    cache_hit: AtomicU64,
-    cache_miss: AtomicU64,
-}
-
-impl Diag {
-    #[inline]
-    pub fn cache_hit(&self) {
-        self.cache_hit.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub fn cache_miss(&self) {
-        self.cache_miss.fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub fn snapshot(&self) -> (u64, u64) {
-        (
-            self.cache_hit.load(Ordering::Relaxed),
-            self.cache_miss.load(Ordering::Relaxed),
-        )
-    }
-}
 pub async fn connect_to_db(database_url: &str) -> Result<PgPool> {
     // Connect to database
     let pool = PgPoolOptions::new()
@@ -91,7 +23,7 @@ pub async fn connect_to_db(database_url: &str) -> Result<PgPool> {
         .await
         .context("Failed to connect to database")?;
 
-    // Run SQL migrations
+    // Run SQL migrations in case sqlx is using offline cache
     sqlx::migrate!()
         .run(&pool)
         .await
@@ -100,92 +32,34 @@ pub async fn connect_to_db(database_url: &str) -> Result<PgPool> {
     Ok(pool)
 }
 
-pub fn build_test_app_state(pool: PgPool) -> Result<AppState> {
-    let metrics = Arc::new(LinkMetrics::new());
-    build_app_state(pool, metrics)
-}
+pub async fn run() -> Result<()> {
+    let app_port: u16 = env::var("APP_PORT")
+        .expect("APP_PORT not set in env")
+        .parse()
+        .expect("Could not parse APP_PORT from env");
 
-pub fn build_app_state(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<AppState> {
-    // Shuffled alphabet for Sqids to generate ids from
-    const ALPHABET: &str = "79Hr0JZijqWTnxhgoDEKMRpX4FNIfywG3e6LcldO5bCUYSBPa81s2QAumtzVvk";
+    let metrics_port: u16 = env::var("METRICS_PORT")
+        .expect("METRICS_PORT not set in env")
+        .parse()
+        .expect("Could not parse METRICS_PORT from env");
 
-    // Initialize Sqids generator
-    let sqids = Arc::new(
-        Sqids::builder()
-            .min_length(LinkAlias::MIN_RANDOM_ALIAS_LENGTH)
-            .alphabet(ALPHABET.chars().collect())
-            .build()?,
-    );
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL not set in env");
 
-    let cache: Cache<LinkAlias, Option<CachedLink>> = Cache::builder()
-        .time_to_idle(Duration::from_secs(60 * 60 * 24))
-        .max_capacity(3_000)
-        .build();
+    let app_keys = AppKeys::from_env()?;
+    let pool = connect_to_db(&database_url).await?;
+    let state = AppState::new(pool.clone(), app_keys)?;
+    let router = api::build_router(state.clone());
 
-    Ok(AppState {
-        pool,
-        sqids,
-        metrics,
-        cache,
-        sessions: Sessions::default(),
-        hasher: Arc::new(Argon2::default()),
-        diag: Arc::new(Diag::default()),
-        // TODO: move key into env?
-        signer: Arc::new(TokenSigner::new(
-            "YWhlcm9pc2p1c3RhbWFud2hva25vd3NoZWlzZnJlZS4="
-                .as_bytes()
-                .to_vec(),
-        )),
-    })
-}
-
-pub async fn run(config: Settings) -> Result<()> {
-    // metrics endpoint
     PrometheusBuilder::new()
-        .with_http_listener(([0, 0, 0, 0], 9000))
+        .with_http_listener(([0, 0, 0, 0], metrics_port))
         .install()
         .expect("failed to install prometheus recorder");
 
-    let pool = connect_to_db(config.database_url.as_str()).await?;
-
-    let metrics = Arc::new(LinkMetrics::new());
-
-    let state = build_app_state(pool.clone(), metrics.clone())?;
-    let diag = state.diag.clone();
-    let router = api::build_router(state);
-
-    let addr = format!("0.0.0.0:{}", config.port);
-    let listener = TcpListener::bind(&addr).await?;
-
-    tracing::info!("App running on {addr}");
-
     let mut scheduler = Scheduler::new();
+    spawn_background_tasks(state, &mut scheduler);
 
-    scheduler.spawn_task(
-        Scheduler::SECONDS_IN_DAY,
-        "daily_partition",
-        pool.clone(),
-        |p| async move { link_metrics::create_partitions_task(p).await },
-    );
-
-    scheduler.spawn_task(
-        15,
-        "daily_metrics",
-        (pool.clone(), metrics.clone()),
-        |(p, m)| async move { link_metrics::process_batch_task(p, m).await },
-    );
-
-    scheduler.spawn_task(
-        Scheduler::SECONDS_IN_DAY,
-        "link_cleanup",
-        pool.clone(),
-        |p| async move { link_cleanup::link_cleanup_task(p).await },
-    );
-
-    scheduler.spawn_task(5, "diag", diag, |d| async move {
-        diag::print_diagnostics_task(d).await
-    });
-
+    let app_addr = format!("0.0.0.0:{}", app_port);
+    let listener = TcpListener::bind(&app_addr).await?;
     let cancel_main = CancellationToken::new();
     let server_handle = {
         let cancel = cancel_main.clone();
@@ -196,6 +70,7 @@ pub async fn run(config: Settings) -> Result<()> {
                 .await
         })
     };
+    tracing::info!("App running on {app_addr}");
 
     wait_for_shutdown().await;
     cancel_main.cancel();
@@ -213,6 +88,29 @@ pub async fn run(config: Settings) -> Result<()> {
     scheduler.shutdown(60).await;
 
     Ok(())
+}
+
+pub fn spawn_background_tasks(state: AppState, scheduler: &mut Scheduler) {
+    scheduler.spawn_task(
+        Scheduler::SECONDS_IN_DAY,
+        "daily_partition",
+        state.pool.clone(),
+        |p| async move { link_metrics::create_partitions_task(p).await },
+    );
+
+    scheduler.spawn_task(
+        15,
+        "daily_metrics",
+        (state.pool.clone(), state.metrics.clone()),
+        |(p, m)| async move { link_metrics::process_batch_task(p, m).await },
+    );
+
+    scheduler.spawn_task(
+        Scheduler::SECONDS_IN_DAY,
+        "link_cleanup",
+        state.pool.clone(),
+        |p| async move { link_cleanup::link_cleanup_task(p).await },
+    );
 }
 
 async fn wait_for_shutdown() {

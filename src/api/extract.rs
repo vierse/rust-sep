@@ -8,10 +8,7 @@ use axum::{
 use axum_extra::extract::CookieJar;
 use time::OffsetDateTime;
 
-use crate::{
-    api::{session::SessionId, token::Token},
-    app::AppState,
-};
+use crate::api::{AppState, session::SessionId, token::Token};
 
 pub struct RequireUser(pub SessionId);
 

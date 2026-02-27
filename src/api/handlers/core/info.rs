@@ -8,11 +8,11 @@ use serde::Serialize;
 
 use crate::{
     api::{
+        AppState,
         error::ApiError,
         extract::{MaybeToken, MaybeUser},
         token::OwnerToken,
     },
-    app::AppState,
     domain::LinkAlias,
     services::{self, LinkMetricsQuery},
 };

@@ -11,22 +11,22 @@ pub(crate) use shorten::*;
 pub(crate) use unlock::*;
 
 use crate::{
-    api::{error::ApiError, session::SessionId, token::Token},
-    app::{AppState, CachedLink},
+    api::{AppState, error::ApiError, session::SessionId, state::CachedLink, token::Token},
     domain::LinkAlias,
     services,
 };
 use axum::http::StatusCode;
+use metrics::counter;
 use time::{Duration, OffsetDateTime};
 
 pub const EXPIRY_DAYS: i64 = 30;
 
 async fn fetch_link(alias: &LinkAlias, app: &AppState) -> Result<CachedLink, ApiError> {
     let link_opt = if let Some(link) = app.cache.get(alias).await {
-        app.diag.cache_hit();
+        counter!("cache_requests_total", "result" => "hit").increment(1);
         link
     } else {
-        app.diag.cache_miss();
+        counter!("cache_requests_total", "result" => "miss").increment(1);
         app.cache
             .try_get_with_by_ref(alias, services::query_url_by_alias(alias, &app.pool))
             .await

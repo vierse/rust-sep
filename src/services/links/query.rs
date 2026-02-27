@@ -2,7 +2,7 @@ use serde::Serialize;
 use sqlx::PgPool;
 
 use crate::{
-    app::{CachedLink, CachedLinkType},
+    api::{CachedLink, CachedLinkType},
     domain::{LinkAlias, UserId},
     services::{LinkError, ServiceError},
 };
