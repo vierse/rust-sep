@@ -5,13 +5,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
-use time::OffsetDateTime;
 
 use crate::{
     api::{
         error::ApiError,
-        extract::MaybeToken,
-        handlers::{OwnerToken, fetch_link},
+        extract::{MaybeToken, MaybeUser},
+        handlers::OwnerToken,
     },
     app::AppState,
     domain::LinkAlias,
@@ -26,27 +25,26 @@ pub struct LinkInfoResponse {
 }
 
 pub async fn link_info(
+    MaybeUser(session_id): MaybeUser,
     MaybeToken(token): MaybeToken<OwnerToken>,
     State(app): State<AppState>,
     Path(alias): Path<String>,
 ) -> Result<Response, ApiError> {
     let alias: LinkAlias = alias.try_into()?;
 
-    let link = fetch_link(&alias, &app).await?;
+    let link = super::fetch_link(&alias, &app).await?;
 
-    let mut response = LinkInfoResponse::default();
+    let owned = super::is_user_owned(session_id.as_ref(), &link, &app)
+        || super::is_token_owned(token, &link);
 
-    if let Some(token) = token {
-        let now_s = OffsetDateTime::now_utc().unix_timestamp();
-        if token.is_owner(link.id, now_s, link.created_at.unix_timestamp()) {
-            let metrics = services::list_link_metrics(link.id, &app.pool).await?;
-            response.owned = true;
-            response.data = Some(metrics);
-        }
-    }
+    let mut response = LinkInfoResponse {
+        protected: link.password_hash.is_some(),
+        ..Default::default()
+    };
 
-    if link.password_hash.is_some() {
-        response.protected = true;
+    if owned {
+        response.owned = true;
+        response.data = Some(services::list_link_metrics(link.id, &app.pool).await?);
     }
 
     Ok((StatusCode::OK, Json(response)).into_response())

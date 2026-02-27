@@ -191,6 +191,12 @@ pub struct CreateCollectionResponse {
     alias: String,
 }
 
+impl IntoResponse for CreateCollectionResponse {
+    fn into_response(self) -> Response {
+        (StatusCode::CREATED, Json(self)).into_response()
+    }
+}
+
 pub async fn collection_create(
     jar: CookieJar,
     State(app): State<AppState>,
@@ -217,11 +223,7 @@ pub async fn collection_create(
     )
     .await?;
 
-    let response = (
-        StatusCode::CREATED,
-        Json(CreateCollectionResponse { alias: alias_out }),
-    )
-        .into_response();
+    let response = CreateCollectionResponse { alias: alias_out }.into_response();
 
     let now = OffsetDateTime::now_utc();
     let now_s = now.unix_timestamp();
