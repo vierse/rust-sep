@@ -289,7 +289,7 @@ async fn create_link_tx(
 
     let alias = generator
         .encode(&[id as u64])
-        .context("Sqids alphabet was exhausted")?;
+        .map_err(|_| LinkError::GeneratorError)?;
 
     let rec = sqlx::query!(
         r#"

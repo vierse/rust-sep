@@ -1,10 +1,11 @@
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD as Base64};
 use hmac::{Hmac, Mac};
-use serde::{Serialize, de::DeserializeOwned};
 use sha2::Sha256;
 use thiserror::Error;
 
 type HmacSha256 = Hmac<Sha256>;
+
+use super::Token;
 
 #[derive(Debug, Error)]
 pub enum TokenError {
@@ -20,26 +21,6 @@ pub enum TokenError {
     WrongType,
     #[error("token expired")]
     Expired,
-}
-
-pub trait Token: Serialize + DeserializeOwned {
-    const TYPE: &'static str;
-
-    fn exp(&self) -> i64;
-
-    fn typ(&self) -> &str {
-        Self::TYPE
-    }
-
-    fn validate(&self, now_ts: i64) -> Result<(), TokenError> {
-        if self.typ() != Self::TYPE {
-            return Err(TokenError::WrongType);
-        }
-        if self.exp() < now_ts {
-            return Err(TokenError::Expired);
-        }
-        Ok(())
-    }
 }
 
 pub struct TokenSigner {
@@ -75,9 +56,7 @@ impl TokenSigner {
             .map_err(|_| TokenError::InvalidPayload)?;
 
         let token: T = serde_json::from_slice(&payload).map_err(|_| TokenError::InvalidPayload)?;
-
         token.validate(now_s)?;
-
         Ok(token)
     }
 

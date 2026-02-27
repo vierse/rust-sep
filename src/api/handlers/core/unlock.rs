@@ -7,11 +7,15 @@ use axum::{
 };
 use axum_extra::extract::CookieJar;
 use cookie::{Cookie, SameSite};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use time::{Duration, OffsetDateTime};
 
 use crate::{
-    api::{error::ApiError, extract::MaybeToken, token::Token},
+    api::{
+        error::ApiError,
+        extract::MaybeToken,
+        token::{Token, UnlockToken},
+    },
     app::AppState,
     domain::LinkAlias,
 };
@@ -21,38 +25,9 @@ pub struct UnlockRequest {
     pub password: String,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct UnlockToken {
-    link_id: i64,
-    exp: i64,
-}
-
-impl UnlockToken {
-    const TTL_SECS: i64 = 30 * 60; // 30 minutes
-
-    fn new(link_id: i64, now_s: i64) -> Self {
-        Self {
-            link_id,
-            exp: now_s + Self::TTL_SECS,
-        }
-    }
-
-    pub fn link_id(&self) -> i64 {
-        self.link_id
-    }
-}
-
-impl Token for UnlockToken {
-    const TYPE: &'static str = "unlock";
-
-    fn exp(&self) -> i64 {
-        self.exp
-    }
-}
-
 pub async fn unlock(
     jar: CookieJar,
-    MaybeToken(unlock_token): MaybeToken<UnlockToken>,
+    MaybeToken(token): MaybeToken<UnlockToken>,
     State(app): State<AppState>,
     Path(alias): Path<String>,
     Json(UnlockRequest { password }): Json<UnlockRequest>,
@@ -61,17 +36,17 @@ pub async fn unlock(
 
     let link = super::fetch_link(&alias, &app).await?;
 
-    let Some(password_hash) = link.password_hash else {
+    let Some(ref password_hash) = link.password_hash else {
         return Err(ApiError::bad_request());
     };
 
-    if let Some(token) = unlock_token {
-        if link.id == token.link_id() {
-            return Ok((jar, StatusCode::OK.into_response()));
-        }
+    if super::is_token_active(token.as_ref(), &link) {
+        return Ok((jar, StatusCode::OK.into_response()));
     }
 
-    let parsed_hash = PasswordHash::new(&password_hash).map_err(|e| {
+    let mut token = token.unwrap_or_else(UnlockToken::empty);
+
+    let parsed_hash = PasswordHash::new(password_hash).map_err(|e| {
         tracing::debug!(error = %e, "password hash parse error");
         ApiError::internal()
     })?;
@@ -86,17 +61,16 @@ pub async fn unlock(
 
     let now = OffsetDateTime::now_utc();
     let now_s = now.unix_timestamp();
-
-    let token = UnlockToken::new(link.id, now_s);
+    token.update(link.id, now_s);
     let signed_token = app.signer.sign_token(&token)?;
 
-    let cookie = Cookie::build(("unlock", signed_token))
+    let cookie = Cookie::build((UnlockToken::TYPE, signed_token))
         .http_only(true)
         .secure(false)
         .same_site(SameSite::Lax)
         .path("/")
-        .max_age(Duration::seconds(UnlockToken::TTL_SECS))
-        .expires(now + Duration::seconds(UnlockToken::TTL_SECS))
+        .max_age(Duration::seconds(UnlockToken::ttl()))
+        .expires(now + Duration::seconds(UnlockToken::ttl()))
         .build();
 
     let jar = jar.add(cookie);

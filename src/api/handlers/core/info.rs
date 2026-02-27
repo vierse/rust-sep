@@ -10,7 +10,7 @@ use crate::{
     api::{
         error::ApiError,
         extract::{MaybeToken, MaybeUser},
-        handlers::OwnerToken,
+        token::OwnerToken,
     },
     app::AppState,
     domain::LinkAlias,
@@ -35,7 +35,7 @@ pub async fn link_info(
     let link = super::fetch_link(&alias, &app).await?;
 
     let owned = super::is_user_owned(session_id.as_ref(), &link, &app)
-        || super::is_token_owned(token, &link);
+        || super::is_token_active(token.as_ref(), &link);
 
     let mut response = LinkInfoResponse {
         protected: link.password_hash.is_some(),

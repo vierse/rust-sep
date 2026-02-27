@@ -10,7 +10,7 @@ use crate::{
     api::{
         error::ApiError,
         extract::{MaybeToken, MaybeUser},
-        handlers::{OwnerToken, UnlockToken},
+        token::{OwnerToken, UnlockToken},
     },
     app::{AppState, CachedLinkType},
     domain::{LinkAlias, Url},
@@ -41,7 +41,7 @@ pub async fn collection_list(
     let link = super::fetch_link(&alias, &app).await?;
 
     // check if user has a matching token
-    let unlocked = unlock_token.is_some_and(|t| t.link_id() == link.id);
+    let unlocked = super::is_token_active(unlock_token.as_ref(), &link);
     if link.password_hash.is_some() && !unlocked {
         return Ok(LockedResponse {
             unlock: format!("/unlock/{}", alias.as_str()),
@@ -58,7 +58,7 @@ pub async fn collection_list(
 
     // check if user can edit the collection
     let owned = super::is_user_owned(session_id.as_ref(), &link, &app)
-        || super::is_token_owned(owner_token, &link);
+        || super::is_token_active(owner_token.as_ref(), &link);
     Ok(Json(CollectionResponse {
         alias: alias.as_str().to_owned(),
         items,
@@ -77,7 +77,7 @@ pub async fn collection_create_from_link(
     let link = super::fetch_link(&alias, &app).await?;
 
     let owned = super::is_user_owned(session_id.as_ref(), &link, &app)
-        || super::is_token_owned(token, &link);
+        || super::is_token_active(token.as_ref(), &link);
     if !owned {
         return Err(ApiError::unauthorized());
     }
@@ -116,7 +116,7 @@ pub async fn collection_add_url(
     let link = super::fetch_link(&alias, &app).await?;
 
     let owned = super::is_user_owned(session_id.as_ref(), &link, &app)
-        || super::is_token_owned(token, &link);
+        || super::is_token_active(token.as_ref(), &link);
     if !owned {
         return Err(ApiError::unauthorized());
     }
