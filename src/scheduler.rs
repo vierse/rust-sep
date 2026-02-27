@@ -35,6 +35,7 @@ impl Scheduler {
         let cancel = self.cancel_token.clone();
         self.tasks.spawn(async move {
             let mut interval = time::interval(Duration::from_secs(interval_s));
+            interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
             loop {
                 tokio::select! {
