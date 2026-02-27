@@ -93,7 +93,7 @@ impl TryFrom<String> for UserPassword {
             return Err(UserPasswordError::TooLong);
         }
 
-        if value.chars().any(char::is_control) {
+        if value.chars().any(|c| c.is_control() || c.is_whitespace()) {
             return Err(UserPasswordError::InvalidChars);
         }
 
