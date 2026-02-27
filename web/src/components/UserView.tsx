@@ -1,5 +1,5 @@
-import { Button, Dialog, Flex, IconButton, Inset, Table, Text, TextField } from "@radix-ui/themes";
-import { ClipboardIcon, Cross1Icon, PersonIcon } from "@radix-ui/react-icons";
+import { Button, Dialog, Flex, IconButton, Inset, Spinner, Table, Text, TextField, Tooltip } from "@radix-ui/themes";
+import { ClipboardIcon, Cross1Icon, ExternalLinkIcon, InfoCircledIcon, Link1Icon, LockClosedIcon, PersonIcon, RowsIcon } from "@radix-ui/react-icons";
 
 import React from "react";
 import { deleteReq, getReq, postEmpty, postReq } from "../api";
@@ -152,13 +152,13 @@ export function UserView() {
 
 type LinkItem = {
   alias: string;
-  url: string
+  kind: string;
+  protected: boolean;
 };
 
 function LinksTable() {
   const [links, setLinks] = React.useState<LinkItem[]>([]);
   const [loading, setLoading] = React.useState(true);
-
   const [removingLink, setRemovingLink] = React.useState(false);
 
   const { notifyOk, notifyErr, notifyShort } = useNotify();
@@ -196,13 +196,22 @@ function LinksTable() {
     }
   };
 
+  const openLink = (link: LinkItem) => {
+    const url = `${window.location.origin}/r/${encodeURIComponent(link.alias)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const openInfo = (link: LinkItem) => {
+    const url = `${window.location.origin}/info/${encodeURIComponent(link.alias)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <Inset side="x" my="5">
       <Table.Root>
         <Table.Header>
           <Table.Row>
             <Table.ColumnHeaderCell>Link</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>Action</Table.ColumnHeaderCell>
           </Table.Row>
         </Table.Header>
@@ -210,28 +219,59 @@ function LinksTable() {
         <Table.Body>
           {loading ? (
             <Table.Row>
-              <Table.Cell>Loading…</Table.Cell>
+              <Table.Cell>
+                <Spinner />
+              </Table.Cell>
+              <Table.Cell>
+                <Spinner />
+              </Table.Cell>
             </Table.Row>
           ) : links.length === 0 ? (
-            <Table.Row>
-            </Table.Row>
+            <Table.Row />
           ) : (
             links.map((link) => (
               <Table.Row key={link.alias}>
-                <Table.RowHeaderCell>{link.alias}</Table.RowHeaderCell>
-                <Table.Cell>{link.url}</Table.Cell>
+                <Table.RowHeaderCell>
+                  <Flex gap="2" align="center">
+                    {link.kind === "collection" ? <RowsIcon /> : <Link1Icon />}
+                    <span>{link.alias}</span>
+                    {link.protected && <LockClosedIcon />}
+                  </Flex>
+                </Table.RowHeaderCell>
+
                 <Table.Cell>
                   <Flex gap="2" align="center">
-                    <IconButton
-                      variant="ghost"
-                      onClick={() => copyLink(link)}
-                    >
-                      <ClipboardIcon />
-                    </IconButton>
 
-                    <IconButton disabled={removingLink} variant="ghost" onClick={() => removeLink(link)}>
-                      <Cross1Icon />
-                    </IconButton>
+                    <Tooltip content="Go">
+                      <IconButton variant="ghost" onClick={() => openLink(link)}>
+                        <ExternalLinkIcon />
+                      </IconButton>
+                    </Tooltip>
+
+
+                    <Tooltip content="Info">
+                      <IconButton variant="ghost" onClick={() => openInfo(link)}>
+                        <InfoCircledIcon />
+                      </IconButton>
+
+                    </Tooltip>
+
+                    <Tooltip content="Copy">
+                      <IconButton variant="ghost" onClick={() => copyLink(link)}>
+                        <ClipboardIcon />
+                      </IconButton>
+                    </Tooltip>
+
+                    <Tooltip content="Remove">
+                      <IconButton
+                        disabled={removingLink}
+                        variant="ghost"
+                        onClick={() => removeLink(link)}
+                      >
+                        <Cross1Icon />
+                      </IconButton>
+
+                    </Tooltip>
                   </Flex>
                 </Table.Cell>
               </Table.Row>

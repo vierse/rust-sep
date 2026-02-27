@@ -48,8 +48,10 @@ async fn redirect_impl(
             if idx_opt.is_some() {
                 return Err(ApiError::not_found());
             }
+            // shouldn't ever be None for redirect links due to DB check
+            let target_url = link.target_url.ok_or(ApiError::internal())?;
             app.metrics.record_hit(link.id);
-            Ok(Redirect::temporary(&link.url))
+            Ok(Redirect::temporary(&target_url))
         }
         CachedLinkType::Collection => match idx_opt {
             Some(idx) => {

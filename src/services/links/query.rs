@@ -7,19 +7,6 @@ use crate::{
     services::{LinkError, ServiceError},
 };
 
-#[derive(Debug, Clone, Serialize)]
-pub struct LinkItem {
-    pub alias: String,
-    pub url: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct CollectionItem {
-    position: i32,
-    url: String,
-    title: Option<String>,
-}
-
 /// Query url from database
 ///
 /// Returns Ok(None) if the alias does not exist
@@ -45,12 +32,19 @@ pub async fn query_url_by_alias(
     Ok(Some(CachedLink {
         id: rec.id,
         kind,
-        url: rec.target_url.unwrap_or_default(),
+        target_url: rec.target_url,
         user_id: rec.user_id,
         last_seen: rec.last_seen,
         password_hash: rec.password_hash,
         created_at: rec.created_at,
     }))
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LinkItem {
+    alias: String,
+    kind: String,
+    protected: bool,
 }
 
 /// List user's links
@@ -61,7 +55,10 @@ pub async fn query_links_by_user_id(
 ) -> Result<Vec<LinkItem>, ServiceError> {
     let rec_vec = sqlx::query!(
         r#"
-        SELECT alias, target_url
+        SELECT
+            alias,
+            kind,
+            (password_hash IS NOT NULL) AS "protected!"
         FROM links
         WHERE user_id = $1
         ORDER BY created_at DESC
@@ -75,11 +72,19 @@ pub async fn query_links_by_user_id(
         .into_iter()
         .map(|rec| LinkItem {
             alias: rec.alias,
-            url: rec.target_url.unwrap(),
+            kind: rec.kind,
+            protected: rec.protected,
         })
         .collect();
 
     Ok(links)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CollectionItem {
+    position: i32,
+    url: String,
+    title: Option<String>,
 }
 
 pub async fn query_collection_by_id(
