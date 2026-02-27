@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, kind, target_url, last_seen, password_hash, created_at FROM links WHERE alias = $1",
+  "query": "SELECT id, kind, target_url, user_id, last_seen, password_hash, created_at FROM links WHERE alias = $1",
   "describe": {
     "columns": [
       {
@@ -20,16 +20,21 @@
       },
       {
         "ordinal": 3,
+        "name": "user_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
         "name": "last_seen",
         "type_info": "Date"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "password_hash",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -43,10 +48,11 @@
       false,
       false,
       true,
+      true,
       false,
       true,
       false
     ]
   },
-  "hash": "07f7e402b475e192939e78685338adaed92405b881729b5f6deed1ae1dba80a8"
+  "hash": "9d69d06f4f77d9355a61f0a0a21be1c50c6a86a26f29f6aae11517e2061a7246"
 }
