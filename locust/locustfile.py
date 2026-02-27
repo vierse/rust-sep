@@ -46,7 +46,7 @@ def _as_str(x: Any) -> str | None:
 @dataclass(frozen=True)
 class LinkItem:
     alias: str
-    url: str
+    kind: str
 
 def _as_link_list(js: Any) -> list[LinkItem] | None:
     if not isinstance(js, list):
@@ -57,10 +57,10 @@ def _as_link_list(js: Any) -> list[LinkItem] | None:
         if not isinstance(item, dict):
             return None
         alias = _as_str(item.get("alias"))
-        url = _as_str(item.get("url"))
-        if alias is None or url is None:
+        kind = _as_str(item.get("kind"))
+        if alias is None or kind is None:
             return None
-        out.append(LinkItem(alias=alias, url=url))
+        out.append(LinkItem(alias=alias, kind=kind))
 
     return out
 
@@ -116,7 +116,7 @@ class BaseUser(FastHttpUser):
 
             links = _as_link_list(resp.js)
             if links is None:
-                resp.failure(f"list invalid shape (expected list[{{alias,url}}]): {resp.text}")
+                resp.failure(f"list invalid shape (expected list[{{alias,kind,...}}]): {resp.text}")
                 return None
 
             return links
