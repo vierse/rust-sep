@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            alias,\n            kind,\n            (password_hash IS NOT NULL) AS \"protected!\"\n        FROM links\n        WHERE user_id = $1\n        ORDER BY created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "alias",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "protected!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "3a3551bd8da2d665649701dc17a6b4649a14e586ef7bf7c3f0a9679b12cbab76"
+}
