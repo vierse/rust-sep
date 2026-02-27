@@ -1,5 +1,4 @@
 use anyhow::Result;
-use dotenv;
 
 use url_shorten::app;
 
