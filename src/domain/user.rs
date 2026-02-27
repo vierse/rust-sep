@@ -42,7 +42,7 @@ impl TryFrom<String> for UserName {
     type Error = UsernameError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let len = value.chars().count();
+        let len = value.len();
 
         if len < Self::MIN_USERNAME_LENGTH {
             return Err(UsernameError::TooShort);
@@ -84,7 +84,7 @@ impl TryFrom<String> for UserPassword {
     type Error = UserPasswordError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let len = value.chars().count();
+        let len = value.len();
 
         if len < Self::MIN_PASSWORD_LENGTH {
             return Err(UserPasswordError::TooShort);
@@ -93,7 +93,7 @@ impl TryFrom<String> for UserPassword {
             return Err(UserPasswordError::TooLong);
         }
 
-        if value.chars().any(|c| c.is_control()) {
+        if value.chars().any(char::is_control) {
             return Err(UserPasswordError::InvalidChars);
         }
 
