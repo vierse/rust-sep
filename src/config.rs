@@ -58,24 +58,18 @@ pub fn load() -> Result<Settings> {
         Url::parse(&env_str).map_err(|e| e.into())
     })?;
 
-    // to avoid destructuring database_url_opt (we need it later)
-    #[allow(clippy::unnecessary_unwrap)]
-    if port_opt.is_some() && database_url_opt.is_some() {
-        return Ok(Settings {
-            port: port_opt.unwrap(),
-            database_url: database_url_opt.unwrap(),
-        });
+    if let Some(port) = port_opt
+        && let Some(database_url) = database_url_opt
+    {
+        return Ok(Settings { port, database_url });
     }
 
     let config = load_default_config()?;
 
-    let port = match port_opt {
-        Some(val) => val,
-        None => {
-            tracing::warn!("{APP_PORT_ENV} is not set, using value from {DEFAULT_CONFIG_PATH}");
-            config.app_port
-        }
-    };
+    let port = port_opt.unwrap_or_else(|| {
+        tracing::warn!("{APP_PORT_ENV} is not set, using value from {DEFAULT_CONFIG_PATH}");
+        config.app_port
+    });
 
     let database_url = match database_url_opt {
         Some(url) => url,
