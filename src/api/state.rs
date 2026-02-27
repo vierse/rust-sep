@@ -23,7 +23,7 @@ pub enum CachedLinkType {
 pub struct CachedLink {
     pub id: i64,
     pub kind: CachedLinkType,
-    pub url: String,
+    pub target_url: Option<String>,
     pub user_id: Option<i64>,
     pub last_seen: Date,
     pub password_hash: Option<String>,
