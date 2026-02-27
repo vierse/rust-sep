@@ -45,6 +45,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85.0
         with:
           components: rustfmt, clippy
+      - name: copy default .env
+        run: cp .env.default .env
       - name: install sqlx-cli
         run: cargo install sqlx-cli --no-default-features --features postgres --locked --force
       - name: SQL migrations
