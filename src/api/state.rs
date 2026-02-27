@@ -10,6 +10,7 @@ use time::{Date, OffsetDateTime};
 use crate::{
     api::{Sessions, token::TokenSigner},
     domain::LinkAlias,
+    services::CollectionItem,
     tasks::link_metrics::LinkMetrics,
 };
 
@@ -51,13 +52,22 @@ pub struct AppState {
     pub pool: PgPool,
     pub sqids: Arc<Sqids>,
     pub metrics: Arc<LinkMetrics>,
-    pub cache: Cache<LinkAlias, Option<CachedLink>>,
+    pub link_cache: Cache<LinkAlias, CachedLink>,
+    pub link_cache_neg: Cache<LinkAlias, ()>,
+    pub coll_cache: Cache<i64, Vec<CollectionItem>>,
     pub sessions: Sessions,
     pub hasher: Arc<Argon2<'static>>,
     pub signer: Arc<TokenSigner>,
 }
 
 impl AppState {
+    const LINK_CACHE_CAP: u64 = 3_000;
+    const LINK_CACHE_TTI: u64 = 24 * 60 * 60;
+    const LINK_CACHE_NEG_CAP: u64 = 300;
+    const LINK_CACHE_NEG_TTL: u64 = 60;
+    const COLL_CACHE_CAP: u64 = 500;
+    const COLL_CACHE_TTI: u64 = 24 * 60 * 60;
+
     pub fn new(pool: PgPool, keys: AppKeys) -> Result<Self> {
         let sqids = Arc::new(
             Sqids::builder()
@@ -67,9 +77,19 @@ impl AppState {
                 .context("failed to build Sqids")?,
         );
 
-        let cache: Cache<LinkAlias, Option<CachedLink>> = Cache::builder()
-            .time_to_idle(Duration::from_secs(60 * 60 * 24))
-            .max_capacity(3_000)
+        let link_cache: Cache<LinkAlias, CachedLink> = Cache::builder()
+            .time_to_idle(Duration::from_secs(Self::LINK_CACHE_TTI))
+            .max_capacity(Self::LINK_CACHE_CAP)
+            .build();
+
+        let link_cache_neg: Cache<LinkAlias, ()> = Cache::builder()
+            .time_to_live(Duration::from_secs(Self::LINK_CACHE_NEG_TTL))
+            .max_capacity(Self::LINK_CACHE_NEG_CAP)
+            .build();
+
+        let coll_cache: Cache<i64, Vec<CollectionItem>> = Cache::builder()
+            .time_to_idle(Duration::from_secs(Self::COLL_CACHE_TTI))
+            .max_capacity(Self::COLL_CACHE_CAP)
             .build();
 
         let metrics = Arc::new(LinkMetrics::new());
@@ -78,7 +98,9 @@ impl AppState {
             pool,
             sqids,
             metrics,
-            cache,
+            link_cache,
+            link_cache_neg,
+            coll_cache,
             sessions: Sessions::default(),
             hasher: Arc::new(Argon2::default()),
             signer: Arc::new(TokenSigner::new(keys.token_key)),
