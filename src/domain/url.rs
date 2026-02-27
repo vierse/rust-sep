@@ -41,22 +41,27 @@ impl Url {
             return Err(UrlParseError::ContainsUserinfo);
         }
 
-        let host = url
-            .host_str()
-            .ok_or(UrlParseError::EmptyHost)?
-            .trim_end_matches('.')
-            .to_ascii_lowercase();
-
-        if host.is_empty() {
-            return Err(UrlParseError::EmptyHost);
-        }
-
-        if host == "localhost" || host.ends_with(".local") || !host.contains('.') {
-            return Err(UrlParseError::BlockedHost(host.to_owned()));
-        }
-
-        if host == "127.0.0.1" {
-            return Err(UrlParseError::BlockedHost(host.to_owned()));
+        match url.host().ok_or(UrlParseError::EmptyHost)? {
+            url::Host::Domain(host) => {
+                let host = host.trim_end_matches('.').to_ascii_lowercase();
+                if host.is_empty()
+                    || host == "localhost"
+                    || host.ends_with(".local")
+                    || !host.contains('.')
+                {
+                    return Err(UrlParseError::BlockedHost(host.to_owned()));
+                }
+            }
+            url::Host::Ipv4(ipv4_addr) => {
+                if ipv4_addr.is_private() || ipv4_addr.is_loopback() || ipv4_addr.is_broadcast() {
+                    return Err(UrlParseError::BlockedHost(ipv4_addr.to_string()));
+                }
+            }
+            url::Host::Ipv6(ipv6_addr) => {
+                if ipv6_addr.is_loopback() || ipv6_addr.is_unique_local() {
+                    return Err(UrlParseError::BlockedHost(ipv6_addr.to_string()));
+                }
+            }
         }
 
         Ok(())
