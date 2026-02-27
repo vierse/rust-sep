@@ -44,7 +44,7 @@ pub async fn unlock(
         return Ok((jar, StatusCode::OK.into_response()));
     }
 
-    let mut token = token.unwrap_or_else(UnlockToken::empty);
+    let mut token = token.unwrap_or_default();
 
     let parsed_hash = PasswordHash::new(password_hash).map_err(|e| {
         tracing::debug!(error = %e, "password hash parse error");

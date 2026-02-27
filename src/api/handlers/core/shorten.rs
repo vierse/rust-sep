@@ -12,7 +12,7 @@ use time::{Duration, OffsetDateTime};
 use crate::{
     api::{
         error::ApiError,
-        extract::MaybeUser,
+        extract::{MaybeToken, MaybeUser},
         token::{OwnerToken, Token},
     },
     app::AppState,
@@ -41,6 +41,7 @@ impl IntoResponse for ShortenResponse {
 pub async fn shorten(
     jar: CookieJar,
     MaybeUser(session_id_opt): MaybeUser,
+    MaybeToken(token): MaybeToken<OwnerToken>,
     State(app): State<AppState>,
     Json(ShortenRequest {
         url,
@@ -93,13 +94,7 @@ pub async fn shorten(
     let now = OffsetDateTime::now_utc();
     let now_s = now.unix_timestamp();
 
-    let mut token = match jar.get(OwnerToken::TYPE) {
-        Some(cookie) => app
-            .signer
-            .verify_token(cookie.value(), now_s)
-            .unwrap_or_else(|_| OwnerToken::empty()),
-        None => OwnerToken::empty(),
-    };
+    let mut token = token.unwrap_or_default();
     token.update(link_id, now_s);
 
     let signed_token = app.signer.sign_token(&token)?;
@@ -137,6 +132,7 @@ impl IntoResponse for CreateCollectionResponse {
 
 pub async fn collection_create(
     jar: CookieJar,
+    MaybeToken(token): MaybeToken<OwnerToken>,
     State(app): State<AppState>,
     Json(CreateCollectionRequest {
         alias,
@@ -166,14 +162,7 @@ pub async fn collection_create(
     let now = OffsetDateTime::now_utc();
     let now_s = now.unix_timestamp();
 
-    let mut token = match jar.get(OwnerToken::TYPE) {
-        Some(cookie) => app
-            .signer
-            .verify_token(cookie.value(), now_s)
-            .unwrap_or_else(|_| OwnerToken::empty()),
-        None => OwnerToken::empty(),
-    };
-
+    let mut token = token.unwrap_or_default();
     token.update(link_id, now_s);
 
     let signed_token = app.signer.sign_token(&token)?;

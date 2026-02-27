@@ -50,15 +50,19 @@ pub struct SignedToken<T: TokenType, const TTL_SECS: i64, const CAP: usize> {
     _pd: PhantomData<T>,
 }
 
-impl<T: TokenType, const TTL_SECS: i64, const CAP: usize> SignedToken<T, TTL_SECS, CAP> {
-    pub fn empty() -> Self {
+impl<T: TokenType, const TTL_SECS: i64, const CAP: usize> Default
+    for SignedToken<T, TTL_SECS, CAP>
+{
+    fn default() -> Self {
         Self {
             typ: Cow::Borrowed(T::TYPE),
             data: TokenData::default(),
             _pd: PhantomData,
         }
     }
+}
 
+impl<T: TokenType, const TTL_SECS: i64, const CAP: usize> SignedToken<T, TTL_SECS, CAP> {
     pub fn remaining_secs(&self, id: i64, now_s: i64) -> Option<i64> {
         self.data
             .iter()
