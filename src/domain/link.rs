@@ -20,7 +20,7 @@ impl LinkAlias {
     }
 
     fn validate(s: &str) -> Result<(), LinkAliasError> {
-        let len = s.chars().count();
+        let len = s.len();
 
         if len < Self::MIN_ALIAS_LENGTH {
             return Err(LinkAliasError::TooShort);
@@ -30,7 +30,7 @@ impl LinkAlias {
             return Err(LinkAliasError::TooLong);
         }
 
-        if !s.chars().all(|c| c.is_ascii_alphanumeric()) {
+        if !s.chars().all(char::is_alphanumeric) {
             return Err(LinkAliasError::InvalidChars);
         }
 
@@ -83,7 +83,7 @@ impl LinkPassword {
     }
 
     fn validate(s: &str) -> Result<(), LinkPasswordError> {
-        let len = s.chars().count();
+        let len = s.len();
 
         if len < Self::MIN_LINK_PASSWORD_LENGTH {
             return Err(LinkPasswordError::TooShort);
