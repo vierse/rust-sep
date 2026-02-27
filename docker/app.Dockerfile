@@ -14,6 +14,7 @@ RUN cargo build --release
 
 FROM debian:trixie
 COPY --from=build /build/web/dist ./web/dist
+COPY --from=build /build/.env ./.env
 COPY --from=build /build/target/release/server ./server
 
 CMD ["./server"]
