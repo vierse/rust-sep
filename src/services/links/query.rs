@@ -7,16 +7,23 @@ use crate::{
     services::{LinkError, ServiceError},
 };
 
-/// Query url from database
-///
-/// Returns Ok(None) if the alias does not exist
-#[tracing::instrument(name = "services::query_url_by_alias", skip(pool))]
 pub async fn query_url_by_alias(
     alias: &LinkAlias,
     pool: &PgPool,
 ) -> Result<Option<CachedLink>, ServiceError> {
     let rec_opt = sqlx::query!(
-        r#"SELECT id, kind, target_url, user_id, last_seen, password_hash, created_at FROM links WHERE alias = $1"#,
+        r#"
+        SELECT
+            id,
+            kind,
+            target_url,
+            user_id,
+            last_seen,
+            password_hash,
+            created_at
+        FROM links
+        WHERE alias = $1
+        "#,
         alias.as_str()
     )
     .fetch_optional(pool)
@@ -47,8 +54,6 @@ pub struct LinkItem {
     protected: bool,
 }
 
-/// List user's links
-#[tracing::instrument(name = "services::query_links_by_user_id", skip(pool))]
 pub async fn query_links_by_user_id(
     user_id: &UserId,
     pool: &PgPool,
