@@ -10,7 +10,7 @@ use crate::{
 pub async fn query_url_by_alias(
     alias: &LinkAlias,
     pool: &PgPool,
-) -> Result<Option<CachedLink>, ServiceError> {
+) -> Result<CachedLink, ServiceError> {
     let rec_opt = sqlx::query!(
         r#"
         SELECT
@@ -36,7 +36,7 @@ pub async fn query_url_by_alias(
         CachedLinkType::Collection
     };
 
-    Ok(Some(CachedLink {
+    Ok(CachedLink {
         id: rec.id,
         kind,
         target_url: rec.target_url,
@@ -44,7 +44,7 @@ pub async fn query_url_by_alias(
         last_seen: rec.last_seen,
         password_hash: rec.password_hash,
         created_at: rec.created_at,
-    }))
+    })
 }
 
 #[derive(Debug, Clone, Serialize)]

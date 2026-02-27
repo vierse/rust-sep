@@ -6,6 +6,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+use metrics::counter;
+
 use crate::{
     api::{
         AppState,
@@ -41,7 +43,7 @@ pub async fn collection_list(
 
     let link = super::fetch_link(&alias, &app).await?;
 
-    // check if user has a matching token
+    // redirect to unlock prompt if the collection is locked
     let unlocked = super::is_token_active(unlock_token.as_ref(), &link);
     if link.password_hash.is_some() && !unlocked {
         return Ok(LockedResponse {
@@ -54,10 +56,30 @@ pub async fn collection_list(
         return Err(ApiError::bad_request());
     }
 
-    let items = services::query_collection_by_id(link.id, &app.pool).await?;
+    // try load from cache else query the DB
+    let items = match app.coll_cache.get(&link.id).await {
+        Some(items) => {
+            counter!("collection_cache_requests_total", "result" => "hit").increment(1);
+            items
+        }
+        None => {
+            counter!("collection_cache_requests_total", "result" => "miss").increment(1);
+            let pool = app.pool.clone();
+            app.coll_cache
+                .try_get_with(link.id, async move {
+                    services::query_collection_by_id(link.id, &pool).await
+                })
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, link.id, "failed to load collection items");
+                    ApiError::internal()
+                })?
+        }
+    };
+
     app.metrics.record_hit(link.id);
 
-    // check if user can edit the collection
+    // check if owned (just visual indicator for the user)
     let owned = super::is_user_owned(session_id.as_ref(), &link, &app)
         || super::is_token_active(owner_token.as_ref(), &link);
     Ok(Json(CollectionResponse {
@@ -85,8 +107,7 @@ pub async fn collection_create_from_link(
 
     services::convert_to_collection(&alias, &app.pool).await?;
 
-    // invalidate cache entry
-    app.cache.invalidate(&alias).await;
+    app.link_cache.invalidate(&alias).await;
 
     Ok((
         StatusCode::CREATED,
@@ -125,6 +146,8 @@ pub async fn collection_add_url(
     let url: Url = url.try_into()?;
 
     services::add_url_to_collection(&alias, &url, title.as_deref(), &app.pool).await?;
+
+    app.coll_cache.invalidate(&link.id).await;
 
     Ok((StatusCode::CREATED).into_response())
 }

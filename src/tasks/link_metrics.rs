@@ -86,7 +86,7 @@ impl Default for LinkMetrics {
 }
 
 pub async fn process_batch_task(pool: PgPool, metrics: Arc<LinkMetrics>) -> Result<()> {
-    const CHUNK_SIZE: usize = 500;
+    const CHUNK_SIZE: usize = 1_000;
 
     let map: Arc<LinkMetricsMap> = metrics.swap_map();
 
