@@ -8,7 +8,6 @@ use crate::{
 
 use super::hash_password;
 
-#[tracing::instrument(name = "services::create_user_account", skip_all)]
 pub async fn create_user(
     username: UserName,
     password: UserPassword,
@@ -33,7 +32,6 @@ pub async fn create_user(
     Ok(rec_opt.map(|rec| User::new(rec.id, username)))
 }
 
-#[tracing::instrument(name = "services::verify_user_password", skip_all)]
 pub async fn authenticate_user(
     username: UserName,
     password: UserPassword,

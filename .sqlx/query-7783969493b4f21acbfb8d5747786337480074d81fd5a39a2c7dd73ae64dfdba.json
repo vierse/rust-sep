@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, kind, target_url, user_id, last_seen, password_hash, created_at FROM links WHERE alias = $1",
+  "query": "\n        SELECT\n            id,\n            kind,\n            target_url,\n            user_id,\n            last_seen,\n            password_hash,\n            created_at\n        FROM links\n        WHERE alias = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -54,5 +54,5 @@
       false
     ]
   },
-  "hash": "9d69d06f4f77d9355a61f0a0a21be1c50c6a86a26f29f6aae11517e2061a7246"
+  "hash": "7783969493b4f21acbfb8d5747786337480074d81fd5a39a2c7dd73ae64dfdba"
 }

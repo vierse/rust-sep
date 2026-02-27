@@ -8,11 +8,6 @@ use crate::{
     services::{CollectionError, LinkError, MAX_COLLECTION_ITEMS, ServiceError, hash_password},
 };
 
-/// Create a new link for the provided URL
-#[tracing::instrument(
-    name = "services::create_link",
-    skip(generator, pool, password, hasher)
-)]
 pub async fn create_link(
     url: &Url,
     generator: &Sqids,
@@ -27,13 +22,6 @@ pub async fn create_link(
     Ok(out)
 }
 
-/// Create a link with user-defined alias for the provided URL
-///
-/// Returns Ok(false) if the alias is already taken
-#[tracing::instrument(
-    name = "services::create_link_with_alias",
-    skip(pool, password, hasher)
-)]
 pub async fn create_link_with_alias(
     url: &Url,
     alias: &LinkAlias,
@@ -180,8 +168,6 @@ pub async fn add_url_to_collection(
     Ok(())
 }
 
-/// Remove user's link
-#[tracing::instrument(name = "services::remove_user_link", skip(pool))]
 pub async fn delete_link_for_user(
     user_id: &UserId,
     alias: &LinkAlias,
