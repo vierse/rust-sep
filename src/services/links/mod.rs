@@ -5,7 +5,6 @@ pub use ops::*;
 pub use query::*;
 use thiserror::Error;
 
-// TODO: settings
 pub const MAX_COLLECTION_ITEMS: i32 = 10;
 
 #[derive(Debug, Error)]
