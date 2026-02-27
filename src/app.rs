@@ -58,7 +58,7 @@ pub async fn run() -> Result<()> {
     let mut scheduler = Scheduler::new();
     spawn_background_tasks(state, &mut scheduler);
 
-    let app_addr = format!("0.0.0.0:{}", app_port);
+    let app_addr = format!("0.0.0.0:{app_port}");
     let listener = TcpListener::bind(&app_addr).await?;
     let cancel_main = CancellationToken::new();
     let server_handle = {
