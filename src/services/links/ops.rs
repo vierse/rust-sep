@@ -67,7 +67,7 @@ pub async fn create_collection(
 
     let mut tx = pool.begin().await?;
 
-    let password = password.map(|v| v.as_str());
+    let password = password.map(LinkPassword::as_str);
     let (link_id, alias) = match alias {
         Some(link_alias) => {
             create_link_with_alias_tx(link_alias, None, &mut tx, None, password, hasher).await?

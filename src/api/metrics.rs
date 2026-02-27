@@ -8,8 +8,7 @@ pub async fn request_metrics_mw(req: Request<Body>, next: Next) -> Response {
     let route: SharedString = req
         .extensions()
         .get::<MatchedPath>()
-        .map(|m| m.as_str().to_owned())
-        .unwrap_or("unknown".to_owned())
+        .map_or("unknown".to_owned(), |m| m.as_str().to_owned())
         .into();
 
     let method: SharedString = req.method().as_str().to_owned().into();
