@@ -15,6 +15,8 @@ type CreateCollectionResponse = {
   alias: string;
 };
 
+const URL_LIMIT = 10;
+
 export function CollectionCreator() {
   // Notifications
   const { notifyErr, dismiss } = useNotify();
@@ -85,6 +87,7 @@ export function CollectionCreator() {
 
   const canSubmit = urls.some((u) => u.trim().length > 0);
   const stateChanged = canSubmit || linkAlias || linkPassword || urls.length > 1;
+  const limitReached = urls.length >= URL_LIMIT;
   return (
     <Flex direction="column" gap="3" style={{ width: "40rem" }}>
       <Flex direction="row" gap="3" style={{ width: "100%" }}>
@@ -125,7 +128,7 @@ export function CollectionCreator() {
 
       <Flex justify="between">
         <Flex direction="row" gap="3" style={{ width: "100%" }}>
-          <Button variant="soft" onClick={addUrl}>
+          <Button variant="soft" onClick={addUrl} disabled={waiting || limitReached}>
             <PlusIcon />Add URL
           </Button>
           <Button color="green" loading={waiting} disabled={!canSubmit} onClick={submit}>
