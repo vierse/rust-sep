@@ -12,7 +12,6 @@ pub(crate) use unlock::*;
 
 use crate::{
     api::{AppState, error::ApiError, session::SessionId, state::CachedLink, token::Token},
-    domain::LinkAlias,
     services::{self, LinkError, ServiceError},
 };
 use axum::http::StatusCode;
@@ -21,7 +20,7 @@ use time::{Duration, OffsetDateTime};
 
 pub const EXPIRY_DAYS: i64 = 30;
 
-async fn fetch_link(alias: &LinkAlias, app: &AppState) -> Result<CachedLink, ApiError> {
+async fn fetch_link(alias: &str, app: &AppState) -> Result<CachedLink, ApiError> {
     fn validate_cached_link(link: &CachedLink) -> Result<(), ApiError> {
         let today = OffsetDateTime::now_utc().date();
         if link.last_seen < today.saturating_sub(Duration::days(EXPIRY_DAYS)) {
@@ -65,7 +64,7 @@ async fn fetch_link(alias: &LinkAlias, app: &AppState) -> Result<CachedLink, Api
         }
         Err(e) => match e.as_ref() {
             ServiceError::LinkError(LinkError::NotFound) => {
-                app.link_cache_neg.insert(alias.clone(), ()).await;
+                app.link_cache_neg.insert(alias.to_string(), ()).await;
                 counter!("link_cache_neg_inserts_total").increment(1);
                 Err(ApiError::not_found())
             }

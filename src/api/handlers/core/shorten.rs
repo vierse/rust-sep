@@ -89,6 +89,8 @@ pub async fn shorten(
         }
     };
 
+    app.link_cache_neg.invalidate(&alias_out).await;
+
     let response = ShortenResponse { alias: alias_out }.into_response();
 
     let now = OffsetDateTime::now_utc();
@@ -142,20 +144,23 @@ pub async fn collection_create(
 ) -> Result<(CookieJar, Response), ApiError> {
     let alias = alias.map(LinkAlias::try_from).transpose()?;
     let password = password.map(LinkPassword::try_from).transpose()?;
-    let urls: Vec<Url> = urls
+    let urls: Vec<String> = urls
         .into_iter()
         .map(Url::try_from)
+        .map(|u| u.map(|url| url.into_string()))
         .collect::<Result<_, _>>()?;
 
     let (link_id, alias_out) = services::create_collection(
         urls,
-        alias.as_ref(),
-        password.as_ref(),
+        alias.as_deref(),
+        password.as_deref(),
         &app.sqids,
         &app.hasher,
         &app.pool,
     )
     .await?;
+
+    app.link_cache_neg.invalidate(&alias_out).await;
 
     let response = CreateCollectionResponse { alias: alias_out }.into_response();
 

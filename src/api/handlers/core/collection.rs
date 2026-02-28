@@ -107,7 +107,7 @@ pub async fn collection_create_from_link(
 
     services::convert_to_collection(&alias, &app.pool).await?;
 
-    app.link_cache.invalidate(&alias).await;
+    app.link_cache.invalidate(alias.as_str()).await;
 
     Ok((
         StatusCode::CREATED,
