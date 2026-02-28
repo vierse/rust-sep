@@ -3,7 +3,7 @@ use sqlx::PgPool;
 
 use crate::{
     api::{CachedLink, CachedLinkType},
-    domain::UserId,
+    domain::{LinkId, UserId},
     services::{LinkError, ServiceError},
 };
 
@@ -90,7 +90,7 @@ pub struct CollectionItem {
 }
 
 pub async fn query_collection_by_id(
-    link_id: i64,
+    link_id: LinkId,
     pool: &PgPool,
 ) -> Result<Vec<CollectionItem>, ServiceError> {
     let rows = sqlx::query!(
@@ -116,7 +116,7 @@ pub async fn query_collection_by_id(
 }
 
 pub async fn query_collection_url_by_pos(
-    link_id: i64,
+    link_id: LinkId,
     pos: i32,
     pool: &PgPool,
 ) -> Result<String, ServiceError> {

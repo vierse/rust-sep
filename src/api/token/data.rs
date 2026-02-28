@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
 
+use crate::domain::LinkId;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct TokenEntry(i64, i64);
+pub struct TokenEntry(LinkId, i64);
 
 impl TokenEntry {
-    pub fn id(self) -> i64 {
+    pub fn id(self) -> LinkId {
         self.0
     }
     pub fn exp(self) -> i64 {

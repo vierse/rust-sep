@@ -8,6 +8,8 @@ pub use sign::*;
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+use crate::domain::LinkId;
+
 pub type OwnerToken = SignedToken<OwnerType, { 24 * 60 * 60 }, 50>;
 pub type UnlockToken = SignedToken<UnlockType, { 60 * 60 }, 10>;
 
@@ -29,7 +31,7 @@ pub trait Token: Serialize + DeserializeOwned {
 
     fn exp(&self) -> i64;
     fn typ(&self) -> &str;
-    fn contains(&self, id: i64, now_s: i64) -> bool;
+    fn contains(&self, id: LinkId, now_s: i64) -> bool;
 
     fn validate(&self, now_s: i64) -> Result<(), TokenError> {
         if self.typ() != Self::TYPE {
@@ -63,14 +65,14 @@ impl<T: TokenType, const TTL_SECS: i64, const CAP: usize> Default
 }
 
 impl<T: TokenType, const TTL_SECS: i64, const CAP: usize> SignedToken<T, TTL_SECS, CAP> {
-    pub fn remaining_secs(&self, id: i64, now_s: i64) -> Option<i64> {
+    pub fn remaining_secs(&self, id: LinkId, now_s: i64) -> Option<i64> {
         self.data
             .iter()
             .find(|e| e.id() == id)
             .and_then(|e| (e.exp() > now_s).then_some(e.exp() - now_s))
     }
 
-    pub fn update(&mut self, id: i64, now_s: i64) {
+    pub fn update(&mut self, id: LinkId, now_s: i64) {
         self.data.update(id, now_s);
     }
 
@@ -98,7 +100,7 @@ impl<T: TokenType, const TTL_SECS: i64, const CAP: usize> Token for SignedToken<
         self.exp()
     }
 
-    fn contains(&self, id: i64, now_s: i64) -> bool {
+    fn contains(&self, id: LinkId, now_s: i64) -> bool {
         self.data.iter().any(|e| e.id() == id && e.exp() > now_s)
     }
 }

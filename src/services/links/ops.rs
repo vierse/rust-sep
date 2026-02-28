@@ -4,7 +4,7 @@ use sqids::Sqids;
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::{
-    domain::UserId,
+    domain::{LinkId, UserId},
     services::{CollectionError, LinkError, MAX_COLLECTION_ITEMS, ServiceError, hash_password},
 };
 
@@ -15,7 +15,7 @@ pub async fn create_link(
     user_id: Option<UserId>,
     password: Option<&str>,
     hasher: &Argon2<'_>,
-) -> Result<(i64, String), ServiceError> {
+) -> Result<(LinkId, String), ServiceError> {
     let mut tx = pool.begin().await?;
     let out = create_link_tx(generator, Some(url), &mut tx, user_id, password, hasher).await?;
     tx.commit().await?;
@@ -29,7 +29,7 @@ pub async fn create_link_with_alias(
     user_id: Option<UserId>,
     password: Option<&str>,
     hasher: &Argon2<'_>,
-) -> Result<(i64, String), ServiceError> {
+) -> Result<(LinkId, String), ServiceError> {
     let mut tx = pool.begin().await?;
     let out =
         create_link_with_alias_tx(alias, Some(url), &mut tx, user_id, password, hasher).await?;
@@ -44,7 +44,7 @@ pub async fn create_collection(
     generator: &Sqids,
     hasher: &Argon2<'_>,
     pool: &PgPool,
-) -> Result<(i64, String), ServiceError> {
+) -> Result<(LinkId, String), ServiceError> {
     if urls.is_empty() {
         return Err(CollectionError::Empty.into());
     }
@@ -257,7 +257,7 @@ async fn create_link_tx(
     user_id: Option<UserId>,
     password: Option<&str>,
     hasher: &Argon2<'_>,
-) -> Result<(i64, String), ServiceError> {
+) -> Result<(LinkId, String), ServiceError> {
     let password_hash = password
         .filter(|p| !p.is_empty())
         .map(|p| hash_password(p, hasher))
@@ -304,7 +304,7 @@ async fn create_link_with_alias_tx(
     user_id: Option<UserId>,
     password: Option<&str>,
     hasher: &Argon2<'_>,
-) -> Result<(i64, String), ServiceError> {
+) -> Result<(LinkId, String), ServiceError> {
     let password_hash = password
         .filter(|p| !p.is_empty())
         .map(|p| hash_password(p, hasher))

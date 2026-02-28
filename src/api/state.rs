@@ -9,7 +9,7 @@ use time::{Date, OffsetDateTime};
 
 use crate::{
     api::{Sessions, token::TokenSigner},
-    domain::LinkAlias,
+    domain::{LinkAlias, LinkId, UserId},
     services::CollectionItem,
     tasks::link_metrics::LinkMetrics,
 };
@@ -22,10 +22,10 @@ pub enum CachedLinkType {
 
 #[derive(Debug, Clone)]
 pub struct CachedLink {
-    pub id: i64,
+    pub id: LinkId,
     pub kind: CachedLinkType,
     pub target_url: Option<String>,
-    pub user_id: Option<i64>,
+    pub user_id: Option<UserId>,
     pub last_seen: Date,
     pub password_hash: Option<String>,
     pub created_at: OffsetDateTime,
@@ -54,7 +54,7 @@ pub struct AppState {
     pub metrics: Arc<LinkMetrics>,
     pub link_cache: Cache<String, CachedLink>,
     pub link_cache_neg: Cache<String, ()>,
-    pub coll_cache: Cache<i64, Vec<CollectionItem>>,
+    pub coll_cache: Cache<LinkId, Vec<CollectionItem>>,
     pub sessions: Sessions,
     pub hasher: Arc<Argon2<'static>>,
     pub signer: Arc<TokenSigner>,
@@ -87,7 +87,7 @@ impl AppState {
             .max_capacity(Self::LINK_CACHE_NEG_CAP)
             .build();
 
-        let coll_cache: Cache<i64, Vec<CollectionItem>> = Cache::builder()
+        let coll_cache: Cache<LinkId, Vec<CollectionItem>> = Cache::builder()
             .time_to_idle(Duration::from_secs(Self::COLL_CACHE_TTI))
             .max_capacity(Self::COLL_CACHE_CAP)
             .build();
