@@ -3,14 +3,11 @@ use sqlx::PgPool;
 
 use crate::{
     api::{CachedLink, CachedLinkType},
-    domain::{LinkAlias, UserId},
+    domain::UserId,
     services::{LinkError, ServiceError},
 };
 
-pub async fn query_url_by_alias(
-    alias: &LinkAlias,
-    pool: &PgPool,
-) -> Result<CachedLink, ServiceError> {
+pub async fn query_url_by_alias(alias: &str, pool: &PgPool) -> Result<CachedLink, ServiceError> {
     let rec_opt = sqlx::query!(
         r#"
         SELECT
@@ -24,7 +21,7 @@ pub async fn query_url_by_alias(
         FROM links
         WHERE alias = $1
         "#,
-        alias.as_str()
+        alias
     )
     .fetch_optional(pool)
     .await?;

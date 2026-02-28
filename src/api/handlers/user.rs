@@ -29,9 +29,9 @@ pub async fn remove_user_link(
     let alias: LinkAlias = alias.try_into()?;
 
     let session = app.sessions.get_session_data(&session_id)?;
-    services::delete_link_for_user(&session.user_id, &alias, &app.pool).await?;
+    services::delete_link_for_user(session.user_id, &alias, &app.pool).await?;
 
-    app.link_cache.invalidate(&alias).await;
+    app.link_cache.invalidate(alias.as_str()).await;
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }

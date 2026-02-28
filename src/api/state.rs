@@ -52,8 +52,8 @@ pub struct AppState {
     pub pool: PgPool,
     pub sqids: Arc<Sqids>,
     pub metrics: Arc<LinkMetrics>,
-    pub link_cache: Cache<LinkAlias, CachedLink>,
-    pub link_cache_neg: Cache<LinkAlias, ()>,
+    pub link_cache: Cache<String, CachedLink>,
+    pub link_cache_neg: Cache<String, ()>,
     pub coll_cache: Cache<i64, Vec<CollectionItem>>,
     pub sessions: Sessions,
     pub hasher: Arc<Argon2<'static>>,
@@ -77,12 +77,12 @@ impl AppState {
                 .context("failed to build Sqids")?,
         );
 
-        let link_cache: Cache<LinkAlias, CachedLink> = Cache::builder()
+        let link_cache: Cache<String, CachedLink> = Cache::builder()
             .time_to_idle(Duration::from_secs(Self::LINK_CACHE_TTI))
             .max_capacity(Self::LINK_CACHE_CAP)
             .build();
 
-        let link_cache_neg: Cache<LinkAlias, ()> = Cache::builder()
+        let link_cache_neg: Cache<String, ()> = Cache::builder()
             .time_to_live(Duration::from_secs(Self::LINK_CACHE_NEG_TTL))
             .max_capacity(Self::LINK_CACHE_NEG_CAP)
             .build();

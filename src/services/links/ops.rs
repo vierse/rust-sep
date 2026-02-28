@@ -4,12 +4,12 @@ use sqids::Sqids;
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::{
-    domain::{LinkAlias, LinkPassword, Url, UserId},
+    domain::UserId,
     services::{CollectionError, LinkError, MAX_COLLECTION_ITEMS, ServiceError, hash_password},
 };
 
 pub async fn create_link(
-    url: &Url,
+    url: &str,
     generator: &Sqids,
     pool: &PgPool,
     user_id: Option<UserId>,
@@ -23,8 +23,8 @@ pub async fn create_link(
 }
 
 pub async fn create_link_with_alias(
-    url: &Url,
-    alias: &LinkAlias,
+    url: &str,
+    alias: &str,
     pool: &PgPool,
     user_id: Option<UserId>,
     password: Option<&str>,
@@ -38,9 +38,9 @@ pub async fn create_link_with_alias(
 }
 
 pub async fn create_collection(
-    urls: Vec<Url>,
-    alias: Option<&LinkAlias>,
-    password: Option<&LinkPassword>,
+    urls: Vec<String>,
+    alias: Option<&str>,
+    password: Option<&str>,
     generator: &Sqids,
     hasher: &Argon2<'_>,
     pool: &PgPool,
@@ -55,7 +55,6 @@ pub async fn create_collection(
 
     let mut tx = pool.begin().await?;
 
-    let password = password.map(LinkPassword::as_str);
     let (link_id, alias) = match alias {
         Some(link_alias) => {
             create_link_with_alias_tx(link_alias, None, &mut tx, None, password, hasher).await?
@@ -64,7 +63,7 @@ pub async fn create_collection(
     };
 
     let positions: Vec<i32> = (0..urls.len() as i32).collect();
-    let target_urls: Vec<String> = urls.iter().map(|u| u.clone().into_string()).collect();
+    let target_urls: Vec<String> = urls.iter().map(|u| u.to_string()).collect();
 
     sqlx::query!(
         r#"
@@ -85,8 +84,8 @@ pub async fn create_collection(
 }
 
 pub async fn add_url_to_collection(
-    alias: &LinkAlias,
-    url: &Url,
+    alias: &str,
+    url: &str,
     title: Option<&str>,
     pool: &PgPool,
 ) -> Result<(), ServiceError> {
@@ -99,7 +98,7 @@ pub async fn add_url_to_collection(
         WHERE alias = $1
         FOR UPDATE
         "#,
-        alias.as_str(),
+        alias,
     )
     .fetch_optional(&mut *tx)
     .await?
@@ -140,7 +139,7 @@ pub async fn add_url_to_collection(
                 "#,
                 parent.id,
                 next_position,
-                url.as_str(),
+                url,
                 title,
             )
             .execute(&mut *tx)
@@ -168,8 +167,8 @@ pub async fn add_url_to_collection(
 }
 
 pub async fn delete_link_for_user(
-    user_id: &UserId,
-    alias: &LinkAlias,
+    user_id: UserId,
+    alias: &str,
     pool: &PgPool,
 ) -> Result<(), ServiceError> {
     sqlx::query!(
@@ -179,7 +178,7 @@ pub async fn delete_link_for_user(
           AND alias = $2
         "#,
         user_id,
-        alias.as_str()
+        alias
     )
     .execute(pool)
     .await?;
@@ -187,7 +186,7 @@ pub async fn delete_link_for_user(
     Ok(())
 }
 
-pub async fn convert_to_collection(alias: &LinkAlias, pool: &PgPool) -> Result<(), ServiceError> {
+pub async fn convert_to_collection(alias: &str, pool: &PgPool) -> Result<(), ServiceError> {
     let mut tx = pool.begin().await?;
 
     let parent = sqlx::query!(
@@ -197,7 +196,7 @@ pub async fn convert_to_collection(alias: &LinkAlias, pool: &PgPool) -> Result<(
         WHERE alias = $1
         FOR UPDATE
         "#,
-        alias.as_str(),
+        alias,
     )
     .fetch_optional(&mut *tx)
     .await?
