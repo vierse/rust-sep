@@ -12,13 +12,16 @@ use base64::Engine;
 use cookie::Cookie;
 use dashmap::DashMap;
 use rand_core::{OsRng, RngCore};
+use thiserror::Error;
 
 use crate::{
     api::AppState,
     domain::{User, UserId},
 };
 
+#[derive(Debug, Error)]
 pub enum SessionError {
+    #[error("session does not exist")]
     NotExists,
 }
 

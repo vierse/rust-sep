@@ -1,3 +1,5 @@
+use thiserror::Error;
+
 pub type UserId = i64;
 
 #[derive(Debug, Clone)]
@@ -20,9 +22,13 @@ impl User {
     }
 }
 
+#[derive(Debug, Error)]
 pub enum UsernameError {
+    #[error("username is too short")]
     TooShort,
+    #[error("username is too long")]
     TooLong,
+    #[error("username contains invalid characters")]
     InvalidChars,
 }
 
@@ -62,9 +68,13 @@ impl TryFrom<String> for UserName {
     }
 }
 
+#[derive(Debug, Error)]
 pub enum UserPasswordError {
+    #[error("user password is too short")]
     TooShort,
+    #[error("user password is too long")]
     TooLong,
+    #[error("user password contains invalid characters")]
     InvalidChars,
 }
 

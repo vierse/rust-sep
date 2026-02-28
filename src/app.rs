@@ -24,6 +24,7 @@ pub async fn connect_to_db(database_url: &str) -> Result<PgPool> {
         .context("Failed to connect to database")?;
 
     // Run SQL migrations in case sqlx is using offline cache
+    tracing::info!("Running sql migrations");
     sqlx::migrate!()
         .run(&pool)
         .await

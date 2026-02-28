@@ -68,16 +68,37 @@ impl IntoResponse for ApiError {
 }
 
 impl From<TokenError> for ApiError {
-    fn from(_: TokenError) -> Self {
+    fn from(error: TokenError) -> Self {
+        tracing::debug!(error = %error);
         Self::unauthorized()
     }
 }
 
 impl From<ServiceError> for ApiError {
     fn from(error: ServiceError) -> Self {
+        tracing::debug!(error = %error);
         match error {
             ServiceError::LinkError(err) => err.into(),
             ServiceError::CollectionError(err) => err.into(),
+            ServiceError::AuthError => {
+                Self::public(StatusCode::UNAUTHORIZED, "Authentication failed")
+            }
+            _ => Self::internal(),
+        }
+    }
+}
+
+impl From<CollectionError> for ApiError {
+    fn from(error: CollectionError) -> Self {
+        match error {
+            CollectionError::AlreadyCollection => {
+                Self::public(StatusCode::BAD_REQUEST, "Already a collection")
+            }
+            CollectionError::LimitReached => Self::public(
+                StatusCode::CONFLICT,
+                "Cannot add more URLs into the collection",
+            ),
+            _ => Self::internal(),
         }
     }
 }
@@ -95,13 +116,15 @@ impl From<LinkError> for ApiError {
 }
 
 impl From<SessionError> for ApiError {
-    fn from(_: SessionError) -> Self {
+    fn from(error: SessionError) -> Self {
+        tracing::debug!(error = %error);
         Self::unauthorized()
     }
 }
 
 impl From<UrlParseError> for ApiError {
     fn from(error: UrlParseError) -> Self {
+        tracing::debug!(error = %error);
         match error {
             UrlParseError::ContainsUserinfo => {
                 Self::public(StatusCode::BAD_REQUEST, "URL contains credentials")
@@ -124,6 +147,7 @@ impl From<UrlParseError> for ApiError {
 
 impl From<LinkAliasError> for ApiError {
     fn from(error: LinkAliasError) -> Self {
+        tracing::debug!(error = %error);
         match error {
             LinkAliasError::InvalidChars => {
                 Self::public(StatusCode::BAD_REQUEST, "Alias contains invalid characters")
@@ -148,6 +172,7 @@ impl From<LinkAliasError> for ApiError {
 
 impl From<LinkPasswordError> for ApiError {
     fn from(error: LinkPasswordError) -> Self {
+        tracing::debug!(error = %error);
         match error {
             LinkPasswordError::InvalidChars => ApiError::public(
                 StatusCode::BAD_REQUEST,
@@ -173,6 +198,7 @@ impl From<LinkPasswordError> for ApiError {
 
 impl From<UsernameError> for ApiError {
     fn from(error: UsernameError) -> Self {
+        tracing::debug!(error = %error);
         match error {
             UsernameError::InvalidChars => ApiError::public(
                 StatusCode::BAD_REQUEST,
@@ -198,6 +224,7 @@ impl From<UsernameError> for ApiError {
 
 impl From<UserPasswordError> for ApiError {
     fn from(error: UserPasswordError) -> Self {
+        tracing::debug!(error = %error);
         match error {
             UserPasswordError::InvalidChars => ApiError::public(
                 StatusCode::BAD_REQUEST,
