@@ -2,11 +2,11 @@ use serde::Serialize;
 use sqlx::PgPool;
 use time::OffsetDateTime;
 
-use crate::services::ServiceError;
+use crate::{domain::LinkId, services::ServiceError};
 
 #[derive(Debug, Serialize)]
 pub struct LinkMetricsQuery {
-    pub link_id: i64,
+    pub link_id: LinkId,
     pub total_hits: i64,
     pub hits_today: i64,
     pub hits_last_30_days: i64,
@@ -15,7 +15,7 @@ pub struct LinkMetricsQuery {
 }
 
 pub async fn list_link_metrics(
-    link_id: i64,
+    link_id: LinkId,
     pool: &PgPool,
 ) -> Result<LinkMetricsQuery, ServiceError> {
     let rec = sqlx::query!(

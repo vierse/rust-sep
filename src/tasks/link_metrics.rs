@@ -15,6 +15,8 @@ use time::{
     macros::format_description,
 };
 
+use crate::domain::LinkId;
+
 pub struct LinkMetricsData {
     hits: AtomicI64,
     last_access_s: AtomicI64,
@@ -37,7 +39,7 @@ impl LinkMetricsData {
     }
 }
 
-pub type LinkMetricsMap = DashMap<i64, LinkMetricsData>;
+pub type LinkMetricsMap = DashMap<LinkId, LinkMetricsData>;
 
 pub struct LinkMetrics {
     current: ArcSwap<LinkMetricsMap>,
@@ -48,7 +50,7 @@ impl LinkMetrics {
         Self::default()
     }
 
-    pub fn record_hit(&self, link_id: i64) {
+    pub fn record_hit(&self, link_id: LinkId) {
         let now_s = OffsetDateTime::now_utc().unix_timestamp();
 
         let map = self.current.load();
@@ -97,7 +99,7 @@ pub async fn process_batch_task(pool: PgPool, metrics: Arc<LinkMetrics>) -> Resu
     let start = Instant::now();
 
     // (link_id, hits, last_access) columns
-    let mut link_id_col: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
+    let mut link_id_col: Vec<LinkId> = Vec::with_capacity(CHUNK_SIZE);
     let mut hits_col: Vec<i64> = Vec::with_capacity(CHUNK_SIZE);
     let mut last_access_col: Vec<OffsetDateTime> = Vec::with_capacity(CHUNK_SIZE);
 
@@ -140,7 +142,7 @@ pub async fn process_batch_task(pool: PgPool, metrics: Arc<LinkMetrics>) -> Resu
 
 async fn flush_to_db(
     pool: &PgPool,
-    link_id_col: &[i64],
+    link_id_col: &[LinkId],
     hits_col: &[i64],
     last_access_col: &[OffsetDateTime],
 ) -> Result<()> {

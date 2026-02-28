@@ -2,6 +2,8 @@ use std::ops::Deref;
 
 use thiserror::Error;
 
+pub type LinkId = i64;
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct LinkAlias(String);
 
