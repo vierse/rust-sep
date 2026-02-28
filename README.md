@@ -1,73 +1,138 @@
 # Rust SEP - URL Shortener
 
-## Setup
+## What's this about?
+This repository contains an implementation of a URL shortener web service using `axum` for backend and a `React` SPA for frontend as part of software engineering lab at LMU in winter semester.
 
+At this point one can:
+1. Shorten links (with generated or user-provided alias, optionally protected by a password)
+2. Create a user account to be able to view the shortened links
+3. Convert individual links into collections
+4. Create collections from several links at once, similarly with generated or user-provided alias and optional password
+5. Look up ownership/password status and metrics of individual links
 
-1. Install [Docker](https://docs.docker.com/get-started/get-docker/).
+A full outline of our API is provided in `docs/api.md`.
 
-2. You need to provide `.env` file that defines environment variables for the project. You can just copy `.env.default`:
+## Quick Setup
+
+0. Install [Docker](https://docs.docker.com/get-started/get-docker/)
+
+1. Check out the repository, `cd` to project root and setup `.env` (you can just copy `.env.default`):
 ```
+git clone https://github.com/vierse/rust-sep.git
+cd rust-sep
 cp .env.default .env
 ```
 
-3. Build web UI:
+2. Build Docker image and start the containers (app + DB, for optional services see below)
 ```
-docker compose run --rm web-build
-```
-
-4. Start database container:
-```
-docker compose up postgres -d
+docker compose up --build app
 ```
 
-5. Run the server:
+3. Done! By default, the app will be available at `localhost:3000`.
+
+4. To bring it all down run:
+```
+docker compose down -v
+```
+Omit `-v` to keep Docker volumes.
+
+## Other Services
+
+### Metrics
+
+Docker compose includes a bunch of other services too. Mainly, we use `metrics` to emit Prometheus metrics through a separate port, by default `9000`. If the app is running in Docker, it will only be accessible to Docker's network.
+
+To gather these metrics, Prometheus server must be started too:
+```
+docker compose up prometheus
+```
+Then Prometheus will be available at `localhost:9090` port.
+
+Grafana can then be used to create dashboards. Start it like so:
+```
+docker compose up grafana
+```
+Granted, this is not something we've had a lot of time to experiment with.
+
+### Load Testing
+
+We used `locust` to generate synthetic traffic to our server. `locust/locustfile.py` describes various scenarios of how our API might be interacted with. We don't consider it to be exhaustive, but a decent general measure of the server's capability to handle many concurrent requests.
+
+Tests were performed from a separate host over local network. To run locust:
+```
+docker compose up locust
+```
+
+Latest report can be found in the corresponding issue (#49).
+
+## Development
+
+You can also run the backend's binary directly:
 ```
 cargo run --bin server
 ```
-
-(Optional) You can also set `RUST_LOG` to print traces:
+With `RUST_LOG=debug` to print debug traces:
 ```
 RUST_LOG=debug cargo run --bin server
 ```
 
-6. By default it should be available at: http://localhost:3000/
+Note that in this case, you need to compile and bundle the frontend manually. This can be done with `deno` (provided you have `deno` installed) or Docker (in case you don't):
+```
+# with Docker
+docker compose run --rm web-build
 
-7. To stop the database container:
-```
-docker compose down -v
-```
-Omit `-v` if you want to keep the data.
-
-## SQL
-First make sure you have `cargo sqlx` installed by running:
-```
-cargo install sqlx-cli
+# with deno
+deno task web:build
 ```
 
-If you add SQL queries, you'll need to generate sqlx cache for compile-time checking without a database running:
+### SQLx
+
+We use `sqlx` with compile-time checked queries. To compile we can use cached queries in `.sqlx/`. For that `SQLX_OFFLINE` must be set to `true` in `.env`. In this case the app can also run SQL migrations on its own.
+
+For development we need a live DB and `SQLX_OFFLINE` must be set to `false`, as we can't generate `sqlx` cache otherwise. In this case, `sqlx-cli` is required to run migrations:
+```
+# start PostgreSQL container
+docker compose up postgres
+
+cargo install --locked sqlx-cli
+sqlx migrate run
+```
+
+To generate `.sqlx` cache:
 ```
 cargo sqlx prepare
 ```
-sqlx cache is stored in `.sqlx` and should be included in Git.
 
-## Tests
+To create a new migration (following our scheme):
+```
+sqlx migrate add
+```
 
-Run:
+To run tests (requires live DB with migrations applied):
 ```
 cargo test
 ```
 
-## Making requests with `curl`
+### Web UI
+
+For frontend development we use `Vite` to serve our web UI. 
+
+`Vite` then routes the API requests to backend. This behavior can be configured in `web/vite.config.ts`. To run `Vite` we used `deno`, see `deno.json` for possible tasks.
+
+To just run `Vite`'s dev server:
+```
+deno task web:dev
+```
+
+### Making requests with `curl`
 
 `POST` Request:
 ```
-curl -X POST http://localhost:3000/api/shorten \
-     -H "Content-Type: application/json" \
-     -d '{"url": "https://example.com"}' \
-     -w "\nStatus: %{http_code}\n"
+curl -i localhost:3000/api/shorten \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://example.com"}'
 ```
 `GET` Request:
 ```
-curl http://localhost:3000/abcxyz \
-     -w "\nStatus: %{http_code}\n"
+curl -i localhost:3000/r/abcxyz
 ```
