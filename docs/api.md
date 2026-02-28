@@ -28,5 +28,5 @@ Many internal errors are simply `500 Internal Server Error`
 | `POST /api/auth/login` | Authenticate user using `username` and `password` | On success `200 {"username": "..."}` and sets a session cookie. `400` indicates a validation error. `401` indicates auth error. |
 | `POST /api/auth/register` | Create user with `username` and `password` | On success `200 {"username": "..."}` and sets a session cookie. `400` indicates a validation error or username already existing. |
 | `GET /api/user/list` | List links owned by authenticated user | On success `200 [{"alias": "...", "kind": "...", "protected": bool}, ...]` otherwise `401` indicates auth error. |
-| `DELETE /api/user/link/{alias}` | Delete a user-owned link by alias | On success `204` otherwise `400` indicates a validation error. `401` auth error. |
+| `DELETE /api/user/link/{alias}` | Delete a user-owned link by alias | On success `204` otherwise `400` indicates a validation error. `401` auth error, `404` alias not found. |
 | `POST /api/user/logout` | Logout current user | On success `204` and clears session cookie. `401` if session does not exist or is invalid. |

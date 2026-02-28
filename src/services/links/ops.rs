@@ -171,7 +171,7 @@ pub async fn delete_link_for_user(
     alias: &str,
     pool: &PgPool,
 ) -> Result<(), ServiceError> {
-    sqlx::query!(
+    let rec = sqlx::query!(
         r#"
         DELETE FROM links
         WHERE user_id = $1
@@ -182,6 +182,10 @@ pub async fn delete_link_for_user(
     )
     .execute(pool)
     .await?;
+
+    if rec.rows_affected() == 0 {
+        return Err(LinkError::NotFound.into());
+    }
 
     Ok(())
 }
