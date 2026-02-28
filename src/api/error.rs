@@ -12,7 +12,7 @@ use crate::{
         LinkAlias, LinkAliasError, LinkPassword, LinkPasswordError, UrlParseError, UserName,
         UserPassword, UserPasswordError, UsernameError,
     },
-    services::{LinkError, ServiceError},
+    services::{CollectionError, LinkError, ServiceError},
 };
 
 #[derive(Debug)]
@@ -77,11 +77,7 @@ impl From<ServiceError> for ApiError {
     fn from(error: ServiceError) -> Self {
         match error {
             ServiceError::LinkError(err) => err.into(),
-            _ => {
-                // propagated internal errors will be logged here
-                tracing::error!(error = %error, "internal error: ");
-                Self::internal()
-            }
+            ServiceError::CollectionError(err) => err.into(),
         }
     }
 }
