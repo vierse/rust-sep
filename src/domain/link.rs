@@ -1,12 +1,17 @@
 use std::ops::Deref;
 
+use thiserror::Error;
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct LinkAlias(String);
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum LinkAliasError {
+    #[error("link alias is too short")]
     TooShort,
+    #[error("link alias is too long")]
     TooLong,
+    #[error("link alias contains invalid characters")]
     InvalidChars,
 }
 
@@ -67,10 +72,13 @@ impl TryFrom<&str> for LinkAlias {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkPassword(String);
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum LinkPasswordError {
+    #[error("link password is too short")]
     TooShort,
+    #[error("link password is too long")]
     TooLong,
+    #[error("link password contains invalid characters")]
     InvalidChars,
 }
 
