@@ -58,12 +58,17 @@ Granted, this is not something we've had a lot of time to experiment with.
 
 We used `locust` to generate synthetic traffic to our server. `locust/locustfile.py` describes various scenarios of how our API might be interacted with. We don't consider it to be exhaustive, but a decent general measure of the server's capability to handle many concurrent requests.
 
-Tests were performed from a separate host over local network. To run locust:
+Tests were performed from a separate host over local network. First, a dataset needs to be created using the provided Python script:
+```
+cd locust
+python create_datasets.py
+```
+This will generate 10_000 url entries, shorten them and store the resulting aliases. Then to run locust:
 ```
 docker compose up locust
 ```
+Its UI will be available at `localhost:8089`, where it will be possible to set the target amount of users, run time and the target's address.
 
-Latest report can be found in the corresponding issue (#49).
 
 ## Development
 
