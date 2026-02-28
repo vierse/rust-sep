@@ -157,7 +157,6 @@ pub async fn add_url_to_collection(
             .execute(&mut *tx)
             .await?;
         }
-        "redirect" => return Err(anyhow!("this is not a collection").into()),
         _ => {
             return Err(anyhow!("DB contained unexpected value for record kind").into());
         }
@@ -236,7 +235,7 @@ pub async fn convert_to_collection(alias: &LinkAlias, pool: &PgPool) -> Result<(
         }
 
         "collection" => {
-            return Err(anyhow!("Already a collection").into());
+            return Err(CollectionError::AlreadyCollection.into());
         }
         _ => {
             return Err(anyhow!("DB contained unexpected value for record kind").into());

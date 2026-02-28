@@ -13,6 +13,8 @@ pub enum CollectionError {
     LimitReached,
     #[error("cannot insert empty collection")]
     Empty,
+    #[error("already a collection")]
+    AlreadyCollection,
 }
 
 #[derive(Debug, Error)]
